@@ -54,7 +54,7 @@ export default function Brochure() {
             </h3>
             <p className="text-sm text-slate-600 leading-relaxed mb-4">
               <strong>Why Participate?</strong><br/>
-              It provides an "outcome agnostic ground" to understand complex requirements. Using our codified framework, we eliminate ambiguity, offering a structured environment where engagement rules are clear.
+              It provides a "neutral ground" to understand complex requirements. Using our codified framework, we eliminate ambiguity, offering a structured environment where engagement rules are clear.
             </p>
           </div>
 

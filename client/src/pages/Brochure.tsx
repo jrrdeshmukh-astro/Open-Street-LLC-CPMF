@@ -96,7 +96,7 @@ export default function Brochure() {
             <p className="text-xs text-[#bfa15f] uppercase tracking-widest mb-4">ESTD. 2020</p>
             <p className="text-xs text-slate-400">
               www.openstreet.quest<br/>
-              program@openstreet.quest
+              +1(908)848-1562
             </p>
           </div>
         </div>

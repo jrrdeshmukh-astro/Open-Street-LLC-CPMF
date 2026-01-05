@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -8,7 +7,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Printer, ArrowRight, Shield, Globe, Zap, FileText } from "lucide-react";
+import { Printer, Shield, Globe, Zap, FileText, CheckCircle2 } from "lucide-react";
 import Logo from "@assets/logo_1767655886239.png";
 
 export default function Brochure() {
@@ -17,7 +16,7 @@ export default function Brochure() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8f9fa] print:bg-white text-slate-900 font-sans">
+    <div className="min-h-screen bg-slate-100 print:bg-white text-slate-900 font-sans">
       {/* Print Button - Hidden when printing */}
       <div className="fixed bottom-8 right-8 z-50 no-print animate-in fade-in slide-in-from-bottom-4 duration-500">
         <Button 
@@ -26,200 +25,224 @@ export default function Brochure() {
           className="shadow-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-full px-8 py-6 h-auto flex items-center gap-3 transition-all hover:scale-105"
         >
           <Printer className="w-5 h-5" />
-          Save as PDF
+          Print Trifold PDF
         </Button>
+        <div className="mt-2 text-center text-xs text-muted-foreground bg-white/80 backdrop-blur px-2 py-1 rounded shadow-sm">
+          Select "Landscape" & "None" for Margins
+        </div>
       </div>
 
-      {/* A4 Container */}
-      <div className="max-w-[210mm] mx-auto bg-white min-h-screen shadow-2xl print:shadow-none print:max-w-none print:w-full print:mx-0 overflow-hidden relative">
+      {/* 
+        TRIFOLD LAYOUT STRUCTURE
+        A standard trifold brochure has 2 sides:
+        Side 1 (Outside): [ Inside Flap ] [ Back Cover ] [ Front Cover ]
+        Side 2 (Inside):  [ Left Panel  ] [ Center Panel ] [ Right Panel ]
+      */}
+
+      {/* --- PAGE 1: OUTSIDE (Front, Back, Flap) --- */}
+      {/* On screen, we limit width to A4 landscape equivalent approx 1122px */}
+      <div className="print-page w-[297mm] h-[210mm] mx-auto bg-white shadow-2xl print:shadow-none grid grid-cols-3 mb-8 print:mb-0 overflow-hidden relative">
         
-        {/* Decorative Top Border */}
-        <div className="h-2 w-full bg-gradient-to-r from-primary via-[#bfa15f] to-primary"></div>
-
-        {/* Content Padding */}
-        <div className="p-12 md:p-16 print:p-0">
+        {/* PANEL 1 (Left): Inside Flap (Folded In) */}
+        <div className="border-r border-dashed border-slate-200 p-8 flex flex-col justify-center bg-slate-50 relative">
+          <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-primary/20 to-primary/5"></div>
           
-          {/* Header Section */}
-          <header className="flex flex-col items-center text-center mb-12 border-b-2 border-[#bfa15f]/20 pb-12">
-            <div className="mb-8 relative">
-              <div className="absolute inset-0 bg-[#bfa15f]/20 blur-3xl rounded-full opacity-50"></div>
-              <img 
-                src={Logo} 
-                alt="Open Street LLC Logo" 
-                className="w-32 h-32 md:w-40 md:h-40 object-contain relative z-10 drop-shadow-sm"
-              />
-            </div>
-            <h1 className="text-4xl md:text-5xl font-serif font-bold text-primary mb-4 tracking-tight leading-tight">
-              Codified Program Management Framework
-            </h1>
-            <p className="text-xl md:text-2xl text-muted-foreground font-light max-w-2xl">
-              Strategic Engagement for the Government-Industry-Academia Ecosystem
+          <div className="mb-6">
+            <h3 className="text-xl font-serif font-bold text-primary mb-4 flex items-center gap-2">
+              <Shield className="w-5 h-5 text-[#bfa15f]" />
+              Strategic Value
+            </h3>
+            <p className="text-sm text-slate-600 leading-relaxed mb-4">
+              <strong>Why Participate?</strong><br/>
+              It provides a "neutral ground" to understand complex requirements. Using our codified framework, we eliminate ambiguity, offering a structured environment where engagement rules are clear.
             </p>
-          </header>
-
-          {/* Intro Text */}
-          <section className="mb-12 print:mb-8">
-            <p className="text-lg leading-relaxed text-slate-700">
-              This document outlines how Indian and international companies can leverage the <strong className="text-primary font-semibold">Codified Program Management Framework (CPMF)</strong> to engage with the government-industry-academia ecosystem effectively and compliantly.
-            </p>
-          </section>
-
-          {/* Two Column Layout for Q&A */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12 print:gap-6 print:mb-8">
-            
-            {/* Column 1 */}
-            <div className="space-y-8 print:space-y-6">
-              <Section 
-                icon={<Shield className="w-5 h-5 text-[#bfa15f]" />}
-                title="The Strategic Value"
-              >
-                <QA 
-                  q="Why should a company participate in an Open Street–managed program?"
-                  a="Participation provides a 'neutral ground' to understand complex requirements and share technical insights. By using a codified framework, we eliminate the typical ambiguity of multi-stakeholder meetings. You get a structured environment where the rules of engagement are clear."
-                />
-                <QA 
-                  q="How does this help international or Indian firms specifically?"
-                  a={
-                    <ul className="list-none space-y-2 mt-2">
-                      <li className="flex gap-2 text-sm">
-                        <span className="text-[#bfa15f] font-bold">•</span>
-                        <span><strong>International Firms:</strong> Compliant pathway to understand regional landscapes without violating non-solicitation rules.</span>
-                      </li>
-                      <li className="flex gap-2 text-sm">
-                        <span className="text-[#bfa15f] font-bold">•</span>
-                        <span><strong>Indian Firms:</strong> Structured platform to interface with global leaders and bridge the gap to international standards.</span>
-                      </li>
-                    </ul>
-                  }
-                />
-              </Section>
-
-              <Section 
-                icon={<FileText className="w-5 h-5 text-[#bfa15f]" />}
-                title="Operational Benefits"
-              >
-                <QA 
-                  q="What does 'Codified' mean for my company’s compliance team?"
-                  a="It means every interaction is auditable and documented. Our framework includes explicit Rules of Engagement and Moderator Scripts that prevent out-of-scope discussions, protecting your company from legal risks."
-                />
-                <QA 
-                  q="We are a technical firm. How does this framework handle complex data or IP?"
-                  a="The framework utilizes Non-Attributable Insight Capture. We focus on synthesizing high-level themes and technical requirements rather than capturing proprietary 'secret sauce.' Our role is to facilitate the flow of information, not to own your IP."
-                />
-              </Section>
-            </div>
-
-            {/* Column 2 */}
-            <div className="space-y-8 print:space-y-6">
-              <Section 
-                icon={<Zap className="w-5 h-5 text-[#bfa15f]" />}
-                title="Engagement and Outcomes"
-              >
-                <QA 
-                  q="Does participation guarantee us a government contract?"
-                  a="No. Open Street is outcome-agnostic. We manage the process of engagement, not the results of procurement. Companies benefit by gaining a clearer understanding of the strategic direction of the ecosystem."
-                />
-                <QA 
-                  q="What is the 'durable value' mentioned in the framework?"
-                  a="Our programs produce Synthesis Reports. These summarized insights serve as a roadmap for your internal R&D or strategic planning teams, providing durable value beyond just networking."
-                />
-                <QA 
-                  q="Can we adopt this framework for our own internal programs?"
-                  a="Yes. Organizations can license the Codified Program Management Framework to govern their own internal cross-functional groups or to manage external stakeholder ecosystems with discipline and transparency."
-                />
-              </Section>
-
-              {/* Benefits Table */}
-              <div className="bg-slate-50 border border-slate-100 rounded-xl p-6 print:break-inside-avoid shadow-sm">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="bg-[#bfa15f]/10 p-2 rounded-lg">
-                    <Globe className="w-5 h-5 text-[#bfa15f]" />
-                  </div>
-                  <h3 className="text-xl font-serif font-bold text-primary">Summary of Benefits</h3>
-                </div>
-                
-                <div className="rounded-md border bg-white overflow-hidden">
-                  <Table>
-                    <TableHeader className="bg-slate-100">
-                      <TableRow>
-                        <TableHead className="w-[100px] text-primary font-bold">Benefit</TableHead>
-                        <TableHead className="text-primary font-bold">Indian Firms</TableHead>
-                        <TableHead className="text-primary font-bold">International Firms</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      <TableRow>
-                        <TableCell className="font-medium text-xs uppercase tracking-wider text-muted-foreground">Market Intel</TableCell>
-                        <TableCell className="text-sm text-slate-600">Understand global standards</TableCell>
-                        <TableCell className="text-sm text-slate-600">Gain local ecosystem insights</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="font-medium text-xs uppercase tracking-wider text-muted-foreground">Risk Mitigation</TableCell>
-                        <TableCell className="text-sm text-slate-600">Clear guardrails against risks</TableCell>
-                        <TableCell className="text-sm text-slate-600">Adherence to non-advocacy standards</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="font-medium text-xs uppercase tracking-wider text-muted-foreground">Visibility</TableCell>
-                        <TableCell className="text-sm text-slate-600">Showcase expertise globally</TableCell>
-                        <TableCell className="text-sm text-slate-600">Connect with local academic hubs</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="font-medium text-xs uppercase tracking-wider text-muted-foreground">Efficiency</TableCell>
-                        <TableCell className="text-sm text-slate-600">Faster synthesis of themes</TableCell>
-                        <TableCell className="text-sm text-slate-600">Repeatable process for regional entry</TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-            </div>
           </div>
 
-          {/* Compliance Footer */}
-          <footer className="mt-12 pt-8 border-t border-slate-200 text-center print:mt-auto print:pt-4">
-            <div className="inline-block bg-slate-50 px-6 py-4 rounded-lg border border-slate-100 mb-4">
-              <p className="text-sm text-slate-500 italic">
-                <span className="font-semibold not-italic text-primary">Compliance Note:</span> Open Street LLC operates as a neutral facilitator. Participation is informational only and does not imply endorsement, obligation, or contractual commitment from any government or academic entity.
+          <div className="space-y-4">
+             <h4 className="text-sm font-bold text-primary uppercase tracking-wider">Target Benefits</h4>
+             <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-100">
+                <p className="text-xs font-bold text-[#bfa15f] mb-1">FOR INTERNATIONAL FIRMS</p>
+                <p className="text-xs text-slate-600">Compliant pathway to understand regional landscapes (e.g., U.S.-India corridor) without violating non-solicitation rules.</p>
+             </div>
+             <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-100">
+                <p className="text-xs font-bold text-[#bfa15f] mb-1">FOR INDIAN FIRMS</p>
+                <p className="text-xs text-slate-600">Structured platform to interface with global leaders, bridging the gap between indigenous innovation and international standards.</p>
+             </div>
+          </div>
+        </div>
+
+        {/* PANEL 2 (Center): Back Cover */}
+        <div className="border-r border-dashed border-slate-200 p-8 flex flex-col justify-between bg-primary text-white relative overflow-hidden">
+          {/* Background Pattern */}
+          <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '24px 24px' }}></div>
+          
+          <div className="relative z-10 pt-12">
+            <h3 className="text-xl font-serif font-bold text-[#bfa15f] mb-6">Compliance & Integrity</h3>
+            <p className="text-sm text-slate-300 mb-6 leading-relaxed">
+              <strong>Open Street LLC operates as a neutral facilitator.</strong>
+            </p>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Participation is informational only and does not imply endorsement, obligation, or contractual commitment from any government or academic entity. Every interaction is auditable and documented to protect your team.
+            </p>
+          </div>
+
+          <div className="relative z-10 text-center border-t border-white/10 pt-8">
+            <div className="flex justify-center mb-4">
+              <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center">
+                 <Globe className="w-6 h-6 text-[#bfa15f]" />
+              </div>
+            </div>
+            <h4 className="text-lg font-bold mb-1">Open Street LLC</h4>
+            <p className="text-xs text-[#bfa15f] uppercase tracking-widest mb-4">ESTD. 2020</p>
+            <p className="text-xs text-slate-400">
+              www.openstreet.com<br/>
+              program@openstreet.com
+            </p>
+          </div>
+        </div>
+
+        {/* PANEL 3 (Right): Front Cover */}
+        <div className="p-12 flex flex-col items-center justify-center text-center bg-white relative">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-[#bfa15f]/10 rounded-bl-full"></div>
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-primary/5 rounded-tr-full"></div>
+          
+          <img 
+            src={Logo} 
+            alt="Open Street LLC Logo" 
+            className="w-48 h-48 object-contain mb-8 relative z-10 drop-shadow-md"
+          />
+          
+          <div className="relative z-10">
+            <h1 className="text-3xl font-serif font-bold text-primary mb-4 leading-tight">
+              Codified Program Management Framework
+            </h1>
+            <div className="w-16 h-1 bg-[#bfa15f] mx-auto mb-6"></div>
+            <p className="text-lg text-slate-600 font-light">
+              Strategic Engagement for the Government-Industry-Academia Ecosystem
+            </p>
+          </div>
+        </div>
+
+      </div>
+
+      {/* --- PAGE 2: INSIDE (Content Panels) --- */}
+      <div className="print-page w-[297mm] h-[210mm] mx-auto bg-white shadow-2xl print:shadow-none grid grid-cols-3 overflow-hidden">
+        
+        {/* PANEL 4 (Left): Operational Benefits */}
+        <div className="border-r border-dashed border-slate-200 p-8 bg-white">
+           <div className="flex items-center gap-3 mb-6">
+              <div className="bg-[#bfa15f]/10 p-2 rounded-lg">
+                <FileText className="w-5 h-5 text-[#bfa15f]" />
+              </div>
+              <h3 className="text-xl font-serif font-bold text-primary">Operational Benefits</h3>
+            </div>
+
+            <div className="space-y-8">
+              <div>
+                <h4 className="font-bold text-slate-800 mb-2 text-sm">Codified Compliance</h4>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  Every interaction is <strong>auditable and documented</strong>. Our framework includes explicit <em>Rules of Engagement</em> and <em>Moderator Scripts</em> that prevent out-of-scope discussions (like sales pitches), protecting you from legal risks of ad-hoc meetings.
+                </p>
+              </div>
+
+              <div>
+                <h4 className="font-bold text-slate-800 mb-2 text-sm">IP Protection</h4>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  We use <strong>Non-Attributable Insight Capture</strong>. We synthesize high-level themes rather than capturing your proprietary "secret sauce." We facilitate flow, we don't own your IP.
+                </p>
+              </div>
+
+              <div className="bg-slate-50 p-4 rounded border border-slate-100 mt-4">
+                 <div className="flex gap-2 items-start">
+                    <CheckCircle2 className="w-4 h-4 text-[#bfa15f] mt-0.5 shrink-0" />
+                    <p className="text-xs text-slate-500 italic">"Focus on sharing expertise rather than navigating bureaucracy."</p>
+                 </div>
+              </div>
+            </div>
+        </div>
+
+        {/* PANEL 5 (Center): Engagement & Outcomes */}
+        <div className="border-r border-dashed border-slate-200 p-8 bg-white relative">
+            <div className="absolute top-0 left-0 w-full h-1 bg-primary/10"></div>
+            
+            <div className="flex items-center gap-3 mb-6">
+              <div className="bg-[#bfa15f]/10 p-2 rounded-lg">
+                <Zap className="w-5 h-5 text-[#bfa15f]" />
+              </div>
+              <h3 className="text-xl font-serif font-bold text-primary">Outcomes</h3>
+            </div>
+
+            <div className="space-y-6">
+              <div className="prose prose-sm">
+                <h4 className="text-primary font-bold text-sm mb-1">Does this guarantee a contract?</h4>
+                <p className="text-slate-600 text-sm mb-4">
+                  <span className="font-bold text-destructive">No.</span> Open Street is outcome-agnostic. We manage the <em>process</em>, not the <em>results</em>. However, you gain critical intelligence on the ecosystem's strategic direction.
+                </p>
+
+                <h4 className="text-primary font-bold text-sm mb-1">Durable Value</h4>
+                <p className="text-slate-600 text-sm mb-4">
+                  Our programs produce <strong>Synthesis Reports</strong>—documented artifacts summarizing collective insights and gaps. These serve as roadmaps for your internal R&D.
+                </p>
+
+                <h4 className="text-primary font-bold text-sm mb-1">Internal Adoption</h4>
+                <p className="text-slate-600 text-sm">
+                  Organizations can license the CPMF to govern their own internal cross-functional groups with the same discipline.
+                </p>
+              </div>
+            </div>
+        </div>
+
+        {/* PANEL 6 (Right): Summary Table */}
+        <div className="p-8 bg-slate-50">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="bg-[#bfa15f]/10 p-2 rounded-lg">
+                <Globe className="w-5 h-5 text-[#bfa15f]" />
+              </div>
+              <h3 className="text-xl font-serif font-bold text-primary">Benefits Summary</h3>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden text-[10px]">
+              <Table>
+                <TableHeader className="bg-primary">
+                  <TableRow className="hover:bg-primary">
+                    <TableHead className="text-white font-bold h-8">Benefit</TableHead>
+                    <TableHead className="text-white font-bold h-8">Indian Firms</TableHead>
+                    <TableHead className="text-white font-bold h-8">Intl. Firms</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableCell className="font-bold text-primary py-2">Market Intel</TableCell>
+                    <TableCell className="py-2 text-slate-500">Global standards</TableCell>
+                    <TableCell className="py-2 text-slate-500">Local insights</TableCell>
+                  </TableRow>
+                  <TableRow className="bg-slate-50">
+                    <TableCell className="font-bold text-primary py-2">Risk Check</TableCell>
+                    <TableCell className="py-2 text-slate-500">Clear guardrails</TableCell>
+                    <TableCell className="py-2 text-slate-500">Non-advocacy</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-bold text-primary py-2">Visibility</TableCell>
+                    <TableCell className="py-2 text-slate-500">Showcase skill</TableCell>
+                    <TableCell className="py-2 text-slate-500">Connect to hubs</TableCell>
+                  </TableRow>
+                  <TableRow className="bg-slate-50">
+                    <TableCell className="font-bold text-primary py-2">Efficiency</TableCell>
+                    <TableCell className="py-2 text-slate-500">Fast synthesis</TableCell>
+                    <TableCell className="py-2 text-slate-500">Repeatable entry</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="mt-8 p-4 bg-[#bfa15f]/10 rounded border border-[#bfa15f]/20">
+              <h5 className="font-bold text-primary text-sm mb-1">Key Takeaway</h5>
+              <p className="text-xs text-slate-700 italic">
+                "A Codified Framework transforms chaotic networking into structured, compliant, and actionable intelligence."
               </p>
             </div>
-            <div className="flex items-center justify-center gap-2 mt-4 text-xs text-slate-400 uppercase tracking-widest font-medium">
-              <span>Open Street LLC</span>
-              <span>•</span>
-              <span>ESTD. 2020</span>
-            </div>
-          </footer>
-
         </div>
-      </div>
-    </div>
-  );
-}
 
-function Section({ title, icon, children }: { title: string, icon: React.ReactNode, children: React.ReactNode }) {
-  return (
-    <div className="page-break-inside-avoid">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="bg-[#bfa15f]/10 p-2 rounded-lg">
-          {icon}
-        </div>
-        <h3 className="text-xl font-serif font-bold text-primary">{title}</h3>
-      </div>
-      <div className="space-y-6">
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function QA({ q, a }: { q: string, a: React.ReactNode }) {
-  return (
-    <div className="group">
-      <h4 className="font-medium text-primary mb-2 flex gap-2">
-        <span className="text-[#bfa15f] font-bold">Q:</span>
-        {q}
-      </h4>
-      <div className="text-slate-600 text-sm leading-relaxed pl-6 border-l-2 border-slate-100 group-hover:border-[#bfa15f]/50 transition-colors">
-        {a}
       </div>
     </div>
   );

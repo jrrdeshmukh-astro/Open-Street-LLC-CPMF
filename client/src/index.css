@@ -111,8 +111,8 @@
 /* Print Specific Styles */
 @media print {
   @page {
-    margin: 0.5cm;
-    size: A4;
+    size: A4 landscape; /* Landscape for Trifold */
+    margin: 0;          /* Remove browser margins to control brochure bleeds */
   }
   
   body {
@@ -120,6 +120,8 @@
     color: black;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+    width: 297mm; /* A4 width */
+    height: 210mm; /* A4 height */
   }
 
   .no-print {
@@ -131,14 +133,23 @@
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
-
-  /* Avoid page breaks inside elements */
-  .page-break-inside-avoid {
-    page-break-inside: avoid;
+  
+  .print-page {
+    width: 297mm;
+    height: 210mm;
+    page-break-after: always;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0;
+    overflow: hidden;
   }
 
-  /* Force page breaks if needed */
-  .page-break-before {
-    page-break-before: always;
+  .print-page:last-child {
+    page-break-after: auto;
+  }
+
+  /* Hide scrollbars */
+  ::-webkit-scrollbar {
+    display: none;
   }
 }

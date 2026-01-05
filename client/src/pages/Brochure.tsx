@@ -95,8 +95,8 @@ export default function Brochure() {
             <h4 className="text-lg font-bold mb-1">Open Street LLC</h4>
             <p className="text-xs text-[#bfa15f] uppercase tracking-widest mb-4">ESTD. 2020</p>
             <p className="text-xs text-slate-400">
-              www.openstreet.com<br/>
-              program@openstreet.com
+              www.openstreet.quest<br/>
+              program@openstreet.quest
             </p>
           </div>
         </div>

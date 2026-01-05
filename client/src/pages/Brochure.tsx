@@ -8,7 +8,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Printer, Shield, Globe, Zap, FileText, CheckCircle2 } from "lucide-react";
-import Logo from "@assets/logo_1767655886239.png";
+import Logo from "@assets/logo_1767656771540.png";
 
 export default function Brochure() {
   const handlePrint = () => {
@@ -109,7 +109,7 @@ export default function Brochure() {
           <img 
             src={Logo} 
             alt="Open Street LLC Logo" 
-            className="w-48 h-48 object-contain mb-8 relative z-10 drop-shadow-md"
+            className="w-48 h-48 object-contain mb-8 relative z-10 drop-shadow-md rounded-full"
           />
           
           <div className="relative z-10">

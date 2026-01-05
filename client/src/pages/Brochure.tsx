@@ -138,35 +138,43 @@ export default function Brochure() {
                   <h3 className="text-xl font-serif font-bold text-primary">Summary of Benefits</h3>
                 </div>
                 
-                <div className="rounded-md border bg-white overflow-hidden">
+                <div className="rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm">
                   <Table>
-                    <TableHeader className="bg-slate-100">
-                      <TableRow>
-                        <TableHead className="w-[100px] text-primary font-bold">Benefit</TableHead>
-                        <TableHead className="text-primary font-bold">Indian Firms</TableHead>
-                        <TableHead className="text-primary font-bold">International Firms</TableHead>
+                    <TableHeader className="bg-primary">
+                      <TableRow className="hover:bg-primary border-none">
+                        <TableHead className="w-[120px] text-primary-foreground/90 font-bold py-4">Benefit</TableHead>
+                        <TableHead className="text-primary-foreground/90 font-bold py-4">Indian Firms</TableHead>
+                        <TableHead className="text-primary-foreground/90 font-bold py-4">International Firms</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      <TableRow>
-                        <TableCell className="font-medium text-xs uppercase tracking-wider text-muted-foreground">Market Intel</TableCell>
-                        <TableCell className="text-sm text-slate-600">Understand global standards</TableCell>
-                        <TableCell className="text-sm text-slate-600">Gain local ecosystem insights</TableCell>
+                      <TableRow className="even:bg-slate-50 hover:bg-slate-100/50 transition-colors border-slate-100">
+                        <TableCell className="font-bold text-xs uppercase tracking-wider text-primary py-4 align-top">
+                          <span className="bg-[#bfa15f]/10 text-[#8a7238] px-2 py-1 rounded">Market Intel</span>
+                        </TableCell>
+                        <TableCell className="text-sm text-slate-700 py-4 align-top">Understand global standards</TableCell>
+                        <TableCell className="text-sm text-slate-700 py-4 align-top">Gain local ecosystem insights</TableCell>
                       </TableRow>
-                      <TableRow>
-                        <TableCell className="font-medium text-xs uppercase tracking-wider text-muted-foreground">Risk Mitigation</TableCell>
-                        <TableCell className="text-sm text-slate-600">Clear guardrails against risks</TableCell>
-                        <TableCell className="text-sm text-slate-600">Adherence to non-advocacy standards</TableCell>
+                      <TableRow className="even:bg-slate-50 hover:bg-slate-100/50 transition-colors border-slate-100">
+                        <TableCell className="font-bold text-xs uppercase tracking-wider text-primary py-4 align-top">
+                          <span className="bg-[#bfa15f]/10 text-[#8a7238] px-2 py-1 rounded">Risk Mitigation</span>
+                        </TableCell>
+                        <TableCell className="text-sm text-slate-700 py-4 align-top">Clear guardrails against risks</TableCell>
+                        <TableCell className="text-sm text-slate-700 py-4 align-top">Adherence to non-advocacy standards</TableCell>
                       </TableRow>
-                      <TableRow>
-                        <TableCell className="font-medium text-xs uppercase tracking-wider text-muted-foreground">Visibility</TableCell>
-                        <TableCell className="text-sm text-slate-600">Showcase expertise globally</TableCell>
-                        <TableCell className="text-sm text-slate-600">Connect with local academic hubs</TableCell>
+                      <TableRow className="even:bg-slate-50 hover:bg-slate-100/50 transition-colors border-slate-100">
+                        <TableCell className="font-bold text-xs uppercase tracking-wider text-primary py-4 align-top">
+                          <span className="bg-[#bfa15f]/10 text-[#8a7238] px-2 py-1 rounded">Visibility</span>
+                        </TableCell>
+                        <TableCell className="text-sm text-slate-700 py-4 align-top">Showcase expertise globally</TableCell>
+                        <TableCell className="text-sm text-slate-700 py-4 align-top">Connect with local academic hubs</TableCell>
                       </TableRow>
-                      <TableRow>
-                        <TableCell className="font-medium text-xs uppercase tracking-wider text-muted-foreground">Efficiency</TableCell>
-                        <TableCell className="text-sm text-slate-600">Faster synthesis of themes</TableCell>
-                        <TableCell className="text-sm text-slate-600">Repeatable process for regional entry</TableCell>
+                      <TableRow className="even:bg-slate-50 hover:bg-slate-100/50 transition-colors border-slate-100">
+                        <TableCell className="font-bold text-xs uppercase tracking-wider text-primary py-4 align-top">
+                          <span className="bg-[#bfa15f]/10 text-[#8a7238] px-2 py-1 rounded">Efficiency</span>
+                        </TableCell>
+                        <TableCell className="text-sm text-slate-700 py-4 align-top">Faster synthesis of themes</TableCell>
+                        <TableCell className="text-sm text-slate-700 py-4 align-top">Repeatable process for regional entry</TableCell>
                       </TableRow>
                     </TableBody>
                   </Table>

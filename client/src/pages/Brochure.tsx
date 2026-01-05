@@ -54,7 +54,7 @@ export default function Brochure() {
             </h3>
             <p className="text-sm text-slate-600 leading-relaxed mb-4">
               <strong>Why Participate?</strong><br/>
-              It provides a "neutral ground" to understand complex requirements. Using our codified framework, we eliminate ambiguity, offering a structured environment where engagement rules are clear.
+              It provides an "outcome agnostic ground" to understand complex requirements. Using our codified framework, we eliminate ambiguity, offering a structured environment where engagement rules are clear.
             </p>
           </div>
 
@@ -79,7 +79,7 @@ export default function Brochure() {
           <div className="relative z-10 pt-12">
             <h3 className="text-xl font-serif font-bold text-[#bfa15f] mb-6">Compliance & Integrity</h3>
             <p className="text-sm text-slate-300 mb-6 leading-relaxed">
-              <strong>Open Street LLC operates as a neutral facilitator.</strong>
+              <strong>Open Street LLC operates as an outcome agnostic facilitator.</strong>
             </p>
             <p className="text-xs text-slate-400 leading-relaxed">
               Participation is informational only and does not imply endorsement, obligation, or contractual commitment from any government or academic entity. Every interaction is auditable and documented to protect your team.

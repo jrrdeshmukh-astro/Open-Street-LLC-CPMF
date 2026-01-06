@@ -1,5 +1,9 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { 
   FileText, 
   RefreshCw, 
@@ -14,9 +18,10 @@ import {
   XCircle,
   Building2,
   Phone,
-  Globe,
   ArrowRight,
-  CheckCircle2
+  CheckCircle2,
+  Send,
+  Loader2
 } from "lucide-react";
 import Logo from "@assets/logo_1767656771540.png";
 import { Link } from "wouter";
@@ -309,37 +314,42 @@ export default function Home() {
 
       {/* Contact Section */}
       <section id="contact" className="py-24 bg-slate-50">
-        <div className="max-w-4xl mx-auto px-6 text-center">
-          <span className="text-[#bfa15f] uppercase tracking-widest text-sm font-semibold mb-4 block">Get In Touch</span>
-          <h2 className="text-3xl md:text-4xl font-serif font-bold text-primary mb-6">
-            Ready to Learn More?
-          </h2>
-          <p className="text-lg text-muted-foreground mb-12 max-w-2xl mx-auto">
-            Contact us to discuss how the Codified Program Management Framework can support your organization's engagement needs.
-          </p>
+        <div className="max-w-4xl mx-auto px-6">
+          <div className="text-center mb-12">
+            <span className="text-[#bfa15f] uppercase tracking-widest text-sm font-semibold mb-4 block">Get In Touch</span>
+            <h2 className="text-3xl md:text-4xl font-serif font-bold text-primary mb-6">
+              Ready to Learn More?
+            </h2>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              Contact us to discuss how the Codified Program Management Framework can support your organization's engagement needs.
+            </p>
+          </div>
 
-          <div className="bg-white p-8 md:p-12 rounded-2xl shadow-xl border border-slate-200">
-            <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 bg-primary rounded-full flex items-center justify-center">
-                  <Phone className="w-6 h-6 text-white" />
+          <div className="grid md:grid-cols-2 gap-8">
+            {/* Contact Form */}
+            <div className="bg-white p-8 rounded-2xl shadow-xl border border-slate-200">
+              <h3 className="text-xl font-bold text-primary mb-6">Send Us a Message</h3>
+              <ContactForm />
+            </div>
+
+            {/* Contact Info */}
+            <div className="bg-primary p-8 rounded-2xl text-white flex flex-col justify-center">
+              <h3 className="text-xl font-bold text-[#bfa15f] mb-6">Contact Information</h3>
+              
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center">
+                  <Phone className="w-5 h-5 text-[#bfa15f]" />
                 </div>
-                <div className="text-left">
-                  <p className="text-sm text-muted-foreground">Call Us</p>
-                  <p className="text-xl font-bold text-primary">+1(908)848-1562</p>
+                <div>
+                  <p className="text-sm text-slate-400">Call Us</p>
+                  <p className="text-lg font-bold">+1(908)848-1562</p>
                 </div>
               </div>
-              
-              <div className="w-px h-16 bg-slate-200 hidden md:block"></div>
-              
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 bg-[#bfa15f] rounded-full flex items-center justify-center">
-                  <Globe className="w-6 h-6 text-white" />
-                </div>
-                <div className="text-left">
-                  <p className="text-sm text-muted-foreground">Website</p>
-                  <p className="text-xl font-bold text-primary">www.openstreet.info</p>
-                </div>
+
+              <div className="border-t border-white/10 pt-8">
+                <p className="text-sm text-slate-400 leading-relaxed">
+                  We typically respond within 1-2 business days. For urgent inquiries, please call us directly.
+                </p>
               </div>
             </div>
           </div>
@@ -465,5 +475,124 @@ function UsageCard({ icon, title, description }: { icon: React.ReactNode, title:
         <p className="text-muted-foreground text-sm">{description}</p>
       </CardContent>
     </Card>
+  );
+}
+
+function ContactForm() {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    organization: "",
+    message: ""
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    setIsSubmitting(false);
+    setIsSubmitted(true);
+  };
+
+  if (isSubmitted) {
+    return (
+      <div className="text-center py-8">
+        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <CheckCircle2 className="w-8 h-8 text-green-600" />
+        </div>
+        <h4 className="text-xl font-bold text-primary mb-2">Message Sent!</h4>
+        <p className="text-muted-foreground text-sm">
+          Thank you for reaching out. We'll get back to you within 1-2 business days.
+        </p>
+        <Button 
+          variant="outline" 
+          className="mt-6"
+          onClick={() => {
+            setIsSubmitted(false);
+            setFormData({ name: "", email: "", organization: "", message: "" });
+          }}
+          data-testid="button-send-another"
+        >
+          Send Another Message
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="name">Name</Label>
+          <Input 
+            id="name"
+            placeholder="Your name"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            required
+            data-testid="input-name"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="email">Email</Label>
+          <Input 
+            id="email"
+            type="email"
+            placeholder="your@email.com"
+            value={formData.email}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            required
+            data-testid="input-email"
+          />
+        </div>
+      </div>
+      
+      <div className="space-y-2">
+        <Label htmlFor="organization">Organization</Label>
+        <Input 
+          id="organization"
+          placeholder="Your company or organization"
+          value={formData.organization}
+          onChange={(e) => setFormData({ ...formData, organization: e.target.value })}
+          data-testid="input-organization"
+        />
+      </div>
+      
+      <div className="space-y-2">
+        <Label htmlFor="message">Message</Label>
+        <Textarea 
+          id="message"
+          placeholder="How can we help you?"
+          rows={4}
+          value={formData.message}
+          onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+          required
+          data-testid="input-message"
+        />
+      </div>
+      
+      <Button 
+        type="submit" 
+        className="w-full bg-primary hover:bg-primary/90"
+        disabled={isSubmitting}
+        data-testid="button-submit-contact"
+      >
+        {isSubmitting ? (
+          <>
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            Sending...
+          </>
+        ) : (
+          <>
+            <Send className="w-4 h-4 mr-2" />
+            Send Message
+          </>
+        )}
+      </Button>
+    </form>
   );
 }

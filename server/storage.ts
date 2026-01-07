@@ -1,6 +1,6 @@
 import { 
   workflowProgress, artifacts, clients, timeEntries, actions, invoices, invoiceItems, debriefTemplates, debriefRecords, messages,
-  guides, formTemplates, formSubmissions, opportunities, workflowTemplates, workflowInstances,
+  guides, formTemplates, formSubmissions, opportunities, workflowTemplates, workflowInstances, collaborations,
   type WorkflowProgress, type InsertWorkflowProgress,
   type Artifact, type InsertArtifact,
   type Client, type InsertClient,
@@ -16,10 +16,11 @@ import {
   type FormSubmission, type InsertFormSubmission,
   type Opportunity, type InsertOpportunity,
   type WorkflowTemplate, type InsertWorkflowTemplate,
-  type WorkflowInstance, type InsertWorkflowInstance
+  type WorkflowInstance, type InsertWorkflowInstance,
+  type Collaboration, type InsertCollaboration
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, asc } from "drizzle-orm";
+import { eq, and, desc, asc, or, inArray } from "drizzle-orm";
 
 export class DatabaseStorage {
   // Workflow Progress
@@ -409,6 +410,87 @@ export class DatabaseStorage {
 
   async deleteWorkflowInstance(id: string, userId: string): Promise<void> {
     await db.delete(workflowInstances).where(and(eq(workflowInstances.id, id), eq(workflowInstances.userId, userId)));
+  }
+
+  // Collaborations
+  async getCollaborationsByUser(userId: string): Promise<Collaboration[]> {
+    return await db.select().from(collaborations)
+      .where(or(
+        eq(collaborations.ownerId, userId),
+        eq(collaborations.collaboratorId, userId)
+      ))
+      .orderBy(desc(collaborations.createdAt));
+  }
+
+  async getCollaborationsByClient(clientId: string): Promise<Collaboration[]> {
+    return await db.select().from(collaborations)
+      .where(eq(collaborations.clientId, clientId))
+      .orderBy(desc(collaborations.createdAt));
+  }
+
+  async getPendingInvites(userId: string): Promise<Collaboration[]> {
+    return await db.select().from(collaborations)
+      .where(and(
+        eq(collaborations.collaboratorId, userId),
+        eq(collaborations.status, "pending")
+      ))
+      .orderBy(desc(collaborations.invitedAt));
+  }
+
+  async getCollaboration(id: string): Promise<Collaboration | undefined> {
+    const [collab] = await db.select().from(collaborations).where(eq(collaborations.id, id));
+    return collab;
+  }
+
+  async createCollaboration(collab: InsertCollaboration): Promise<Collaboration> {
+    const [created] = await db.insert(collaborations).values(collab).returning();
+    return created;
+  }
+
+  async updateCollaborationStatus(id: string, userId: string, status: string): Promise<Collaboration> {
+    const acceptedAt = status === "accepted" ? new Date() : null;
+    const [updated] = await db.update(collaborations)
+      .set({ status, acceptedAt, updatedAt: new Date() })
+      .where(and(eq(collaborations.id, id), eq(collaborations.collaboratorId, userId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteCollaboration(id: string, ownerId: string): Promise<void> {
+    await db.delete(collaborations).where(and(eq(collaborations.id, id), eq(collaborations.ownerId, ownerId)));
+  }
+
+  // Get clients where user is a collaborator (for shared workflow progress)
+  async getCollaboratedClients(userId: string): Promise<string[]> {
+    const collabs = await db.select({ clientId: collaborations.clientId })
+      .from(collaborations)
+      .where(and(
+        eq(collaborations.collaboratorId, userId),
+        eq(collaborations.status, "accepted")
+      ));
+    return collabs.map(c => c.clientId);
+  }
+
+  // Get all users who are collaborators on a client (for viewing shared progress)
+  async getClientCollaboratorIds(clientId: string): Promise<string[]> {
+    const [client] = await db.select({ userId: clients.userId }).from(clients).where(eq(clients.id, clientId));
+    const collabs = await db.select({ collaboratorId: collaborations.collaboratorId })
+      .from(collaborations)
+      .where(and(eq(collaborations.clientId, clientId), eq(collaborations.status, "accepted")));
+    const ids = [client?.userId, ...collabs.map(c => c.collaboratorId)].filter(Boolean) as string[];
+    return Array.from(new Set(ids));
+  }
+
+  // Get shared workflow progress for a client
+  async getSharedWorkflowProgress(clientId: string): Promise<{ userId: string; progress: WorkflowProgress[] }[]> {
+    const userIds = await this.getClientCollaboratorIds(clientId);
+    const results = await Promise.all(
+      userIds.map(async (userId) => ({
+        userId,
+        progress: await this.getWorkflowProgress(userId)
+      }))
+    );
+    return results;
   }
 }
 

@@ -1,0 +1,196 @@
+# Codified Program Management Framework - Quick Start Guide
+
+## Overview
+
+This guide will help you get started with implementing the Codified Program Management Framework workflow from [openstreet.info](https://openstreet.info/).
+
+## What Was Implemented
+
+### 1. **Workflow Implementation Guide** (`WORKFLOW_IMPLEMENTATION.md`)
+   - Comprehensive step-by-step guide for implementing the framework
+   - Detailed instructions for each of the 5 framework components
+   - Lifecycle stage descriptions (Initiation → Engagement → Synthesis → Continuation)
+   - Compliance checklists and deliverables
+
+### 2. **Workflow Manager Component** (`src/components/WorkflowManager.jsx`)
+   - Interactive workflow tracking interface
+   - Progress tracking across all 5 framework components
+   - Navigation between lifecycle stages
+   - Component completion status tracking
+   - Integration with Artifacts Manager
+
+### 3. **Engagement Stage Component** (`src/components/EngagementStage.jsx`)
+   - Detailed view for each lifecycle stage
+   - Component cards with expandable details
+   - Key elements and artifacts display
+   - Stage-specific guidance
+   - Completion checkboxes
+
+### 4. **Artifacts Manager Component** (`src/components/ArtifactsManager.jsx`)
+   - Document management for all framework artifacts
+   - Text editor for each artifact
+   - Download and copy functionality
+   - Local storage persistence
+   - Key elements checklist
+
+### 5. **App Integration**
+   - Navigation between "Projects" and "Framework Workflow" views
+   - Seamless switching via header buttons
+   - All components integrated and ready to use
+
+## How to Use
+
+### Step 1: Access the Workflow Manager
+
+1. Log in to the application
+2. Click the **"Framework Workflow"** button in the header
+3. You'll see the Workflow Manager interface
+
+### Step 2: Navigate Through Lifecycle Stages
+
+The workflow has 4 main stages:
+- **Initiation** - Program setup and planning
+- **Engagement** - Active stakeholder interaction
+- **Synthesis** - Insight capture and analysis
+- **Continuation** - Follow-on activities and program evolution
+
+Click on any stage tab to view its details and required components.
+
+### Step 3: Complete Framework Components
+
+For each stage, you'll see the relevant framework components:
+1. **Engagement Structure** (Component 01)
+2. **Governance & Compliance Guardrails** (Component 02)
+3. **Facilitation & Moderation Playbooks** (Component 03)
+4. **Stakeholder Coordination** (Component 04)
+5. **Insight Capture & Continuity** (Component 05)
+
+Click on any component card to expand it and see:
+- Key elements checklist
+- Required artifacts
+- Implementation guidance
+
+### Step 4: Mark Components as Complete
+
+- Use the checkbox on each component card to mark it as complete
+- Completed components show a green checkmark
+- Progress is tracked in the progress bar at the top
+
+### Step 5: Manage Artifacts
+
+1. Click **"Show Artifacts Manager"** in the sidebar
+2. Select a component from the sidebar
+3. Document each required artifact in the text editor
+4. Use the download/copy buttons to export your work
+5. All artifacts are automatically saved to local storage
+
+### Step 6: Follow the Implementation Guide
+
+Refer to `WORKFLOW_IMPLEMENTATION.md` for:
+- Detailed step-by-step instructions
+- Deliverables checklists
+- Compliance requirements
+- Timeline guidance
+- Best practices
+
+## Framework Components Overview
+
+### Component 01: Engagement Structure
+**Artifacts:**
+- Program Charter
+- Engagement Architecture Guide
+
+**Key Elements:**
+- Program objectives and scope
+- Engagement formats (forums, roundtables, working groups)
+- Participant roles and responsibilities
+- Program lifecycle stages
+
+### Component 02: Governance & Compliance Guardrails
+**Artifacts:**
+- Governance Framework
+- Rules of Engagement
+
+**Key Elements:**
+- Non-solicitation standards
+- Neutrality and independence principles
+- Prohibited activities
+- Moderator authority and escalation paths
+
+### Component 03: Facilitation & Moderation Playbooks
+**Artifacts:**
+- Facilitator Guide
+- Moderator Scripts
+
+**Key Elements:**
+- Approved session scripts and prompts
+- Facilitation techniques for balanced participation
+- Language for redirecting sales or out-of-scope discussions
+- Session opening and closing protocols
+
+### Component 04: Stakeholder Coordination
+**Artifacts:**
+- Participant Briefings
+- Onboarding Packets
+
+**Key Elements:**
+- Participant briefing materials
+- Role-specific onboarding guidance
+- Communication and coordination workflows
+
+### Component 05: Insight Capture & Continuity
+**Artifacts:**
+- Synthesis Reports
+- Engagement Roadmaps
+
+**Key Elements:**
+- Non-attributable insight capture
+- Cross-sector synthesis of themes
+- Documentation of scope boundaries
+- Options for follow-on engagement
+
+## Key Principles
+
+Remember the framework is:
+- **Documented** - Everything is written and explicit
+- **Repeatable** - Process is consistent across programs
+- **Governed** - Clear compliance guardrails
+- **Auditable** - All artifacts are traceable
+
+## Framework Exclusions
+
+The framework does NOT:
+- Influence decisions or outcomes
+- Provide access to government officials
+- Support procurement or contracting activities
+- Endorse participants or solutions
+
+## Next Steps
+
+1. **Review** the `WORKFLOW_IMPLEMENTATION.md` guide
+2. **Start** with the Initiation stage
+3. **Complete** Component 01 (Engagement Structure)
+4. **Complete** Component 02 (Governance & Compliance)
+5. **Proceed** to Engagement stage
+6. **Document** all artifacts using the Artifacts Manager
+7. **Track** your progress using the Workflow Manager
+
+## Tips
+
+- Use the Artifacts Manager to document all required artifacts
+- Check off components as you complete them
+- Refer to the stage guidance for timeline and focus areas
+- Download your artifacts regularly for backup
+- Review the implementation guide for detailed instructions
+
+## Support
+
+For questions or issues:
+- Review the implementation guide: `WORKFLOW_IMPLEMENTATION.md`
+- Check the framework configuration: `src/config/framework.js`
+- Refer to the Open Street website: https://openstreet.info/
+
+---
+
+*The Codified Program Management Framework focuses on process excellence and is outcome-agnostic. All engagement is informational and non-solicitation in nature.*
+

@@ -21,12 +21,18 @@ import {
   ArrowRight,
   CheckCircle2,
   Send,
-  Loader2
+  Loader2,
+  LayoutDashboard,
+  LogIn,
+  LogOut
 } from "lucide-react";
 import Logo from "@assets/logo_1767656771540.png";
 import { Link } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function Home() {
+  const { user, isLoading } = useAuth();
+
   return (
     <div className="min-h-screen bg-background text-foreground font-sans">
       {/* Navigation */}
@@ -41,10 +47,30 @@ export default function Home() {
             <a href="#usage" className="text-muted-foreground hover:text-primary transition-colors" data-testid="link-usage">Usage</a>
             <a href="#contact" className="text-muted-foreground hover:text-primary transition-colors" data-testid="link-contact">Contact</a>
           </div>
-          <Link href="/brochure" className="hidden md:inline-flex items-center gap-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3 text-sm font-medium transition-colors" data-testid="button-brochure">
-            <FileText className="w-4 h-4" />
-            View Brochure
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/brochure" className="hidden md:inline-flex items-center gap-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3 text-sm font-medium transition-colors" data-testid="button-brochure">
+              <FileText className="w-4 h-4" />
+              Brochure
+            </Link>
+            {!isLoading && (
+              user ? (
+                <>
+                  <Link href="/dashboard" className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-white h-9 rounded-md px-3 text-sm font-medium transition-colors" data-testid="button-dashboard">
+                    <LayoutDashboard className="w-4 h-4" />
+                    Dashboard
+                  </Link>
+                  <a href="/api/logout" className="inline-flex items-center gap-2 border border-slate-200 hover:bg-slate-100 h-9 rounded-md px-3 text-sm font-medium transition-colors text-muted-foreground" data-testid="button-logout">
+                    <LogOut className="w-4 h-4" />
+                  </a>
+                </>
+              ) : (
+                <a href="/api/login" className="inline-flex items-center gap-2 bg-[#bfa15f] hover:bg-[#bfa15f]/90 text-white h-9 rounded-md px-3 text-sm font-medium transition-colors" data-testid="button-login">
+                  <LogIn className="w-4 h-4" />
+                  Login
+                </a>
+              )
+            )}
+          </div>
         </div>
       </nav>
 

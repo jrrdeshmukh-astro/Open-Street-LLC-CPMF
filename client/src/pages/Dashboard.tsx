@@ -40,6 +40,25 @@ const ROLE_LABELS: Record<string, string> = {
   academia: "Academia"
 };
 
+const CONTRACTING_STAGES: { value: string; label: string; description: string }[] = [
+  { value: "sources_sought", label: "Sources Sought", description: "Market research - gathering industry capabilities" },
+  { value: "rfi", label: "RFI/Market Research", description: "Request for Information - government seeking info" },
+  { value: "presolicitation", label: "Pre-Solicitation", description: "Preparing for formal solicitation" },
+  { value: "solicitation", label: "Solicitation", description: "Active bidding - submit proposals" },
+  { value: "award", label: "Award", description: "Contract awarded" },
+  { value: "post_award", label: "Post-Award", description: "Contract execution phase" },
+  { value: "completed", label: "Completed", description: "Engagement complete" }
+];
+
+const SET_ASIDE_OPTIONS = [
+  { value: "none", label: "None / Full & Open" },
+  { value: "small_business", label: "Small Business" },
+  { value: "sdvosb", label: "SDVOSB (Service-Disabled Veteran)" },
+  { value: "wosb", label: "WOSB (Women-Owned)" },
+  { value: "hubzone", label: "HUBZone" },
+  { value: "8a", label: "8(a)" }
+];
+
 export default function Dashboard() {
   const { user, isLoading: authLoading, logout } = useAuth();
   const { toast } = useToast();
@@ -97,6 +116,13 @@ export default function Dashboard() {
   const [slackChannelName, setSlackChannelName] = useState("");
   const [slackWorkspaceName, setSlackWorkspaceName] = useState("");
 
+  // Asana integration state
+  const [asanaSettingsOpen, setAsanaSettingsOpen] = useState(false);
+  const [asanaAccessToken, setAsanaAccessToken] = useState("");
+  const [asanaWorkspaceId, setAsanaWorkspaceId] = useState("");
+  const [asanaProjectId, setAsanaProjectId] = useState("");
+  const [stageFilter, setStageFilter] = useState<string>("all");
+
   // Jira queries
   const { data: jiraSettings } = useQuery<any>({ queryKey: ["/api/jira/settings"], enabled: !!user });
   const { data: jiraProjects = [] } = useQuery<{ id: string; key: string; name: string }[]>({ 
@@ -106,6 +132,17 @@ export default function Dashboard() {
 
   // Slack queries
   const { data: slackSettings } = useQuery<any>({ queryKey: ["/api/slack/settings"], enabled: !!user });
+
+  // Asana queries
+  const { data: asanaSettings } = useQuery<any>({ queryKey: ["/api/asana/settings"], enabled: !!user });
+  const { data: asanaWorkspaces = [] } = useQuery<{ gid: string; name: string }[]>({
+    queryKey: ["/api/asana/workspaces"],
+    enabled: !!user && !!asanaSettings?.hasAccessToken
+  });
+  const { data: asanaProjects = [] } = useQuery<{ gid: string; name: string }[]>({
+    queryKey: ["/api/asana/projects"],
+    enabled: !!user && !!asanaSettings?.workspaceId
+  });
 
   // Slack mutations
   const saveSlackSettingsMutation = useMutation({
@@ -136,6 +173,64 @@ export default function Dashboard() {
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/messages"] }); toast({ title: "Message sent to Slack" }); },
     onError: () => toast({ title: "Failed to send to Slack", variant: "destructive" }),
+  });
+
+  // Asana mutations
+  const saveAsanaSettingsMutation = useMutation({
+    mutationFn: async (data: { accessToken?: string; workspaceId?: string; workspaceName?: string; defaultProjectId?: string; defaultProjectName?: string }) => {
+      const res = await fetch("/api/asana/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data), credentials: "include" });
+      if (!res.ok) throw new Error("Failed to save");
+      return res.json();
+    },
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ["/api/asana/settings"] }); 
+      queryClient.invalidateQueries({ queryKey: ["/api/asana/workspaces"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/asana/projects"] });
+      toast({ title: "Asana settings saved" }); 
+      setAsanaSettingsOpen(false);
+      setAsanaAccessToken("");
+    },
+    onError: () => toast({ title: "Failed to save Asana settings", variant: "destructive" }),
+  });
+
+  const testAsanaConnectionMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/asana/test", { method: "POST", credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: (data) => toast({ title: `Connected to Asana as ${data.user}` }),
+    onError: () => toast({ title: "Failed to connect to Asana", variant: "destructive" }),
+  });
+
+  const pushClientToAsanaMutation = useMutation({
+    mutationFn: async (clientId: string) => {
+      const res = await fetch("/api/asana/push-client", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clientId }), credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/clients"] }); toast({ title: "Client pushed to Asana" }); logActivity("create", "asana_task", undefined, undefined, "Pushed client to Asana"); },
+    onError: () => toast({ title: "Failed to push to Asana", variant: "destructive" }),
+  });
+
+  const syncClientToAsanaMutation = useMutation({
+    mutationFn: async (clientId: string) => {
+      const res = await fetch("/api/asana/sync-client", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clientId }), credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/clients"] }); toast({ title: "Client synced with Asana" }); },
+    onError: () => toast({ title: "Failed to sync with Asana", variant: "destructive" }),
+  });
+
+  const updateClientStageMutation = useMutation({
+    mutationFn: async ({ clientId, stage, notes }: { clientId: string; stage: string; notes?: string }) => {
+      const res = await fetch(`/api/clients/${clientId}/stage`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stage, notes }), credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/clients"] }); toast({ title: "Client stage updated" }); logActivity("update", "client_stage", undefined, undefined, "Updated client contracting stage"); },
+    onError: () => toast({ title: "Failed to update stage", variant: "destructive" }),
   });
 
   // Session activity - log actions
@@ -728,25 +823,22 @@ export default function Dashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
-                    {pendingInvites.map((invite) => {
-                      const inviteClient = clients.find(c => c.id === invite.clientId);
-                      return (
-                        <div key={invite.id} className="flex items-center justify-between p-3 bg-white rounded-lg border" data-testid={`invite-${invite.id}`}>
-                          <div>
-                            <p className="font-medium">Collaboration request</p>
-                            <p className="text-sm text-muted-foreground">From: {invite.collaboratorEmail}</p>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button size="sm" onClick={() => acceptInviteMutation.mutate(invite.id)} disabled={acceptInviteMutation.isPending} data-testid={`accept-invite-${invite.id}`}>
-                              <Check className="w-4 h-4 mr-1" />Accept
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => declineInviteMutation.mutate(invite.id)} disabled={declineInviteMutation.isPending} data-testid={`decline-invite-${invite.id}`}>
-                              <X className="w-4 h-4 mr-1" />Decline
-                            </Button>
-                          </div>
+                    {pendingInvites.map((invite) => (
+                      <div key={invite.id} className="flex items-center justify-between p-3 bg-white rounded-lg border" data-testid={`invite-${invite.id}`}>
+                        <div>
+                          <p className="font-medium">Collaboration request</p>
+                          <p className="text-sm text-muted-foreground">From: {invite.collaboratorEmail}</p>
                         </div>
-                      );
-                    })}
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={() => acceptInviteMutation.mutate(invite.id)} disabled={acceptInviteMutation.isPending} data-testid={`accept-invite-${invite.id}`}>
+                            <Check className="w-4 h-4 mr-1" />Accept
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => declineInviteMutation.mutate(invite.id)} disabled={declineInviteMutation.isPending} data-testid={`decline-invite-${invite.id}`}>
+                            <X className="w-4 h-4 mr-1" />Decline
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
@@ -754,95 +846,226 @@ export default function Dashboard() {
 
             <div className="grid lg:grid-cols-3 gap-6">
               <Card className="lg:col-span-2">
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle className="font-serif">Client Intake</CardTitle>
+                <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-4">
+                  <div className="flex items-center gap-4">
+                    <CardTitle className="font-serif">Client Pipeline</CardTitle>
+                    <Select value={stageFilter} onValueChange={setStageFilter}>
+                      <SelectTrigger className="w-[180px]" data-testid="select-stage-filter">
+                        <SelectValue placeholder="Filter by stage" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Stages</SelectItem>
+                        {CONTRACTING_STAGES.map(s => (
+                          <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <Dialog>
-                    <DialogTrigger asChild><Button data-testid="button-add-client"><Plus className="w-4 h-4 mr-2" />Add Client</Button></DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader><DialogTitle>New Client Intake</DialogTitle><DialogDescription>Enter client information for the engagement.</DialogDescription></DialogHeader>
-                      <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); clientMutation.mutate({ name: fd.get("name") as string, organization: fd.get("organization") as string, email: fd.get("email") as string, phone: fd.get("phone") as string, sector: fd.get("sector") as string, notes: fd.get("notes") as string }); }} className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4"><div className="space-y-2"><Label htmlFor="name">Contact Name</Label><Input id="name" name="name" required data-testid="input-client-name" /></div><div className="space-y-2"><Label htmlFor="organization">Organization</Label><Input id="organization" name="organization" data-testid="input-client-org" /></div></div>
-                        <div className="grid grid-cols-2 gap-4"><div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" name="email" type="email" data-testid="input-client-email" /></div><div className="space-y-2"><Label htmlFor="phone">Phone</Label><Input id="phone" name="phone" data-testid="input-client-phone" /></div></div>
-                        <div className="space-y-2"><Label htmlFor="sector">Sector</Label><Select name="sector"><SelectTrigger data-testid="select-client-sector"><SelectValue placeholder="Select sector" /></SelectTrigger><SelectContent><SelectItem value="government">Government</SelectItem><SelectItem value="industry">Industry</SelectItem><SelectItem value="academia">Academia</SelectItem></SelectContent></Select></div>
-                        <div className="space-y-2"><Label htmlFor="notes">Notes</Label><Textarea id="notes" name="notes" placeholder="Additional information..." data-testid="textarea-client-notes" /></div>
-                        <Button type="submit" className="w-full" disabled={clientMutation.isPending} data-testid="button-submit-client">{clientMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}Create Client</Button>
+                    <DialogTrigger asChild><Button data-testid="button-add-client"><Plus className="w-4 h-4 mr-2" />New Opportunity</Button></DialogTrigger>
+                    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                      <DialogHeader><DialogTitle>New Client / Opportunity Intake</DialogTitle><DialogDescription>Enter opportunity details from SAM.gov or manual intake.</DialogDescription></DialogHeader>
+                      <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); clientMutation.mutate({ name: fd.get("name") as string, organization: fd.get("organization") as string, email: fd.get("email") as string, phone: fd.get("phone") as string, sector: fd.get("sector") as string, notes: fd.get("notes") as string, contractingStage: fd.get("contractingStage") as string, samOpportunityId: fd.get("samOpportunityId") as string, naicsCode: fd.get("naicsCode") as string, pscCode: fd.get("pscCode") as string, setAside: fd.get("setAside") as string, estimatedValue: fd.get("estimatedValue") as string, responseDeadline: fd.get("responseDeadline") ? new Date(fd.get("responseDeadline") as string) : undefined }); }} className="space-y-4">
+                        <div className="border-b pb-3 mb-3"><h4 className="font-medium text-sm text-muted-foreground">Contact Information</h4></div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2"><Label htmlFor="name">Contact Name</Label><Input id="name" name="name" required data-testid="input-client-name" /></div>
+                          <div className="space-y-2"><Label htmlFor="organization">Organization</Label><Input id="organization" name="organization" data-testid="input-client-org" /></div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" name="email" type="email" data-testid="input-client-email" /></div>
+                          <div className="space-y-2"><Label htmlFor="phone">Phone</Label><Input id="phone" name="phone" data-testid="input-client-phone" /></div>
+                        </div>
+                        <div className="space-y-2"><Label htmlFor="sector">Sector</Label><Select name="sector" defaultValue="government"><SelectTrigger data-testid="select-client-sector"><SelectValue placeholder="Select sector" /></SelectTrigger><SelectContent><SelectItem value="government">Government</SelectItem><SelectItem value="industry">Industry</SelectItem><SelectItem value="academia">Academia</SelectItem></SelectContent></Select></div>
+                        
+                        <div className="border-b pb-3 mb-3 mt-6"><h4 className="font-medium text-sm text-muted-foreground">SAM.gov Opportunity Details</h4></div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2"><Label htmlFor="samOpportunityId">SAM.gov Opportunity ID</Label><Input id="samOpportunityId" name="samOpportunityId" placeholder="e.g., 12345ABC" data-testid="input-sam-id" /></div>
+                          <div className="space-y-2"><Label htmlFor="contractingStage">Contracting Stage</Label><Select name="contractingStage" defaultValue="sources_sought"><SelectTrigger data-testid="select-contracting-stage"><SelectValue /></SelectTrigger><SelectContent>{CONTRACTING_STAGES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent></Select></div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-4">
+                          <div className="space-y-2"><Label htmlFor="naicsCode">NAICS Code</Label><Input id="naicsCode" name="naicsCode" placeholder="e.g., 541611" data-testid="input-naics" /></div>
+                          <div className="space-y-2"><Label htmlFor="pscCode">PSC Code</Label><Input id="pscCode" name="pscCode" placeholder="e.g., R425" data-testid="input-psc" /></div>
+                          <div className="space-y-2"><Label htmlFor="setAside">Set-Aside</Label><Select name="setAside" defaultValue="none"><SelectTrigger data-testid="select-set-aside"><SelectValue /></SelectTrigger><SelectContent>{SET_ASIDE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent></Select></div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2"><Label htmlFor="estimatedValue">Estimated Value</Label><Input id="estimatedValue" name="estimatedValue" placeholder="e.g., $1M - $5M" data-testid="input-value" /></div>
+                          <div className="space-y-2"><Label htmlFor="responseDeadline">Response Deadline</Label><Input id="responseDeadline" name="responseDeadline" type="date" data-testid="input-deadline" /></div>
+                        </div>
+                        <div className="space-y-2"><Label htmlFor="notes">Notes</Label><Textarea id="notes" name="notes" placeholder="Additional details, strategy notes..." data-testid="textarea-client-notes" /></div>
+                        <Button type="submit" className="w-full" disabled={clientMutation.isPending} data-testid="button-submit-client">{clientMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}Create Opportunity</Button>
                       </form>
                     </DialogContent>
                   </Dialog>
                 </CardHeader>
                 <CardContent>
-                  <ScrollArea className="h-[400px]">
+                  <ScrollArea className="h-[500px]">
                     <div className="space-y-3">
-                      {clients.length === 0 ? <p className="text-center text-muted-foreground py-8">No clients yet. Add your first client to get started.</p> : clients.map((client) => {
-                        const clientCollabs = collaborations.filter(c => c.clientId === client.id && c.status === "accepted");
-                        return (
-                          <div key={client.id} className="p-4 rounded-lg border border-slate-200 hover:border-primary/50 transition-colors" data-testid={`client-card-${client.id}`}>
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="font-medium">{client.name}</span>
-                              <div className="flex items-center gap-2">
-                                {clientCollabs.length > 0 && (
-                                  <Badge variant="secondary" className="flex items-center gap-1">
-                                    <Share2 className="w-3 h-3" />
-                                    {clientCollabs.length} collaborator{clientCollabs.length > 1 ? 's' : ''}
-                                  </Badge>
+                      {clients.length === 0 ? (
+                        <p className="text-center text-muted-foreground py-8">No clients yet. Add your first opportunity to get started.</p>
+                      ) : (
+                        clients.filter(c => stageFilter === "all" || c.contractingStage === stageFilter).map((client) => {
+                          const clientCollabs = collaborations.filter(c => c.clientId === client.id && c.status === "accepted");
+                          const stageInfo = CONTRACTING_STAGES.find(s => s.value === client.contractingStage) || CONTRACTING_STAGES[0];
+                          return (
+                            <div key={client.id} className="p-4 rounded-lg border border-slate-200 hover:border-primary/50 transition-colors" data-testid={`client-card-${client.id}`}>
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="font-medium">{client.name}</span>
+                                <div className="flex items-center gap-2 flex-wrap justify-end">
+                                  <Badge className="bg-[#bfa15f] text-white hover:bg-[#a8893f]">{stageInfo.label}</Badge>
+                                  {client.asanaTaskId && <Badge variant="outline" className="text-xs">Asana</Badge>}
+                                  {clientCollabs.length > 0 && <Badge variant="secondary" className="flex items-center gap-1"><Share2 className="w-3 h-3" />{clientCollabs.length}</Badge>}
+                                </div>
+                              </div>
+                              <p className="text-sm font-medium text-slate-700">{client.organization}</p>
+                              <div className="flex flex-wrap gap-2 mt-2 text-xs text-muted-foreground">
+                                {client.samOpportunityId && <span>SAM: {client.samOpportunityId}</span>}
+                                {client.naicsCode && <span>NAICS: {client.naicsCode}</span>}
+                                {client.setAside && client.setAside !== "none" && <span className="text-amber-600">Set-Aside: {SET_ASIDE_OPTIONS.find(o => o.value === client.setAside)?.label}</span>}
+                                {client.estimatedValue && <span className="text-green-600">{client.estimatedValue}</span>}
+                              </div>
+                              {client.responseDeadline && (
+                                <p className="text-xs mt-1 text-red-600">Deadline: {new Date(client.responseDeadline).toLocaleDateString()}</p>
+                              )}
+                              
+                              <div className="pt-3 mt-3 border-t flex flex-wrap gap-2 items-center">
+                                <Select value={client.contractingStage || "sources_sought"} onValueChange={(stage) => updateClientStageMutation.mutate({ clientId: client.id, stage })}>
+                                  <SelectTrigger className="w-[160px] h-8 text-xs" data-testid={`select-stage-${client.id}`}>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {CONTRACTING_STAGES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
+                                
+                                {asanaSettings?.hasAccessToken && asanaSettings?.defaultProjectId && (
+                                  client.asanaTaskId ? (
+                                    <Button size="sm" variant="outline" onClick={() => syncClientToAsanaMutation.mutate(client.id)} disabled={syncClientToAsanaMutation.isPending} data-testid={`sync-asana-${client.id}`}>
+                                      <RefreshCw className={`w-3 h-3 mr-1 ${syncClientToAsanaMutation.isPending ? 'animate-spin' : ''}`} />Sync Asana
+                                    </Button>
+                                  ) : (
+                                    <Button size="sm" variant="outline" onClick={() => pushClientToAsanaMutation.mutate(client.id)} disabled={pushClientToAsanaMutation.isPending} data-testid={`push-asana-${client.id}`}>
+                                      <ChevronRight className="w-3 h-3 mr-1" />Push to Asana
+                                    </Button>
+                                  )
                                 )}
-                                <Badge variant="outline">{client.sector || "N/A"}</Badge>
+                                
+                                {(user?.role === "industry_partner" || user?.role === "academia") && (
+                                  selectedClientForCollab === client.id ? (
+                                    <div className="flex gap-1 flex-1">
+                                      <Input placeholder="Collaborator email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} className="h-8 text-xs flex-1" data-testid={`input-invite-email-${client.id}`} />
+                                      <Button size="sm" variant="outline" onClick={() => inviteCollaboratorMutation.mutate({ clientId: client.id, collaboratorEmail: inviteEmail })} disabled={inviteCollaboratorMutation.isPending || !inviteEmail} data-testid={`button-send-invite-${client.id}`}>
+                                        {inviteCollaboratorMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Send"}
+                                      </Button>
+                                      <Button size="sm" variant="ghost" onClick={() => { setSelectedClientForCollab(null); setInviteEmail(""); }}>X</Button>
+                                    </div>
+                                  ) : (
+                                    <Button size="sm" variant="ghost" onClick={() => setSelectedClientForCollab(client.id)} data-testid={`button-invite-collaborator-${client.id}`}>
+                                      <UserPlus className="w-3 h-3 mr-1" />Invite
+                                    </Button>
+                                  )
+                                )}
                               </div>
                             </div>
-                            <p className="text-sm text-muted-foreground">{client.organization}</p>
-                            <p className="text-sm text-muted-foreground mb-3">{client.email}</p>
-                            
-                            {/* Invite Collaborator - Only for industry_partner and academia */}
-                            {(user?.role === "industry_partner" || user?.role === "academia") && (
-                              <div className="pt-3 border-t">
-                                {selectedClientForCollab === client.id ? (
-                                  <div className="flex gap-2">
-                                    <Input 
-                                      placeholder="Enter collaborator's email" 
-                                      value={inviteEmail} 
-                                      onChange={(e) => setInviteEmail(e.target.value)}
-                                      className="flex-1"
-                                      data-testid={`input-invite-email-${client.id}`}
-                                    />
-                                    <Button 
-                                      size="sm" 
-                                      onClick={() => inviteCollaboratorMutation.mutate({ clientId: client.id, collaboratorEmail: inviteEmail })}
-                                      disabled={inviteCollaboratorMutation.isPending || !inviteEmail}
-                                      data-testid={`button-send-invite-${client.id}`}
-                                    >
-                                      {inviteCollaboratorMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send"}
-                                    </Button>
-                                    <Button size="sm" variant="ghost" onClick={() => { setSelectedClientForCollab(null); setInviteEmail(""); }}>
-                                      Cancel
-                                    </Button>
-                                  </div>
-                                ) : (
-                                  <Button 
-                                    size="sm" 
-                                    variant="outline" 
-                                    onClick={() => setSelectedClientForCollab(client.id)}
-                                    data-testid={`button-invite-collaborator-${client.id}`}
-                                  >
-                                    <UserPlus className="w-4 h-4 mr-2" />
-                                    Invite Collaborator
-                                  </Button>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                          );
+                        })
+                      )}
                     </div>
                   </ScrollArea>
                 </CardContent>
               </Card>
+              
               <div className="space-y-6">
+                {/* Asana Integration Card */}
                 <Card>
-                  <CardHeader><CardTitle className="font-serif">Quick Stats</CardTitle></CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"><span>Total Clients</span><span className="font-bold text-xl">{clients.length}</span></div>
-                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"><span>Active</span><span className="font-bold text-xl text-green-600">{clients.filter(c => c.status === "active").length}</span></div>
-                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"><span>Completed</span><span className="font-bold text-xl text-blue-600">{clients.filter(c => c.status === "completed").length}</span></div>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="font-serif text-base flex items-center justify-between">
+                      Asana Integration
+                      <Dialog open={asanaSettingsOpen} onOpenChange={setAsanaSettingsOpen}>
+                        <DialogTrigger asChild>
+                          <Button size="sm" variant="outline" data-testid="button-asana-settings">Settings</Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader><DialogTitle>Asana Settings</DialogTitle><DialogDescription>Connect your Asana workspace to sync client opportunities.</DialogDescription></DialogHeader>
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <Label>Personal Access Token</Label>
+                              <Input type="password" value={asanaAccessToken} onChange={(e) => setAsanaAccessToken(e.target.value)} placeholder={asanaSettings?.hasAccessToken ? "••••••••" : "Enter token"} data-testid="input-asana-token" />
+                              <p className="text-xs text-muted-foreground">Get your token from Asana Developer Console</p>
+                            </div>
+                            {asanaSettings?.hasAccessToken && (
+                              <>
+                                <div className="space-y-2">
+                                  <Label>Workspace</Label>
+                                  <Select value={asanaWorkspaceId || asanaSettings?.workspaceId || ""} onValueChange={(v) => { setAsanaWorkspaceId(v); const ws = asanaWorkspaces.find(w => w.gid === v); saveAsanaSettingsMutation.mutate({ workspaceId: v, workspaceName: ws?.name }); }}>
+                                    <SelectTrigger data-testid="select-asana-workspace"><SelectValue placeholder="Select workspace" /></SelectTrigger>
+                                    <SelectContent>{asanaWorkspaces.map(w => <SelectItem key={w.gid} value={w.gid}>{w.name}</SelectItem>)}</SelectContent>
+                                  </Select>
+                                </div>
+                                {(asanaSettings?.workspaceId || asanaWorkspaceId) && (
+                                  <div className="space-y-2">
+                                    <Label>Default Project</Label>
+                                    <Select value={asanaProjectId || asanaSettings?.defaultProjectId || ""} onValueChange={(v) => { setAsanaProjectId(v); const p = asanaProjects.find(proj => proj.gid === v); saveAsanaSettingsMutation.mutate({ defaultProjectId: v, defaultProjectName: p?.name }); }}>
+                                      <SelectTrigger data-testid="select-asana-project"><SelectValue placeholder="Select project" /></SelectTrigger>
+                                      <SelectContent>{asanaProjects.map(p => <SelectItem key={p.gid} value={p.gid}>{p.name}</SelectItem>)}</SelectContent>
+                                    </Select>
+                                  </div>
+                                )}
+                              </>
+                            )}
+                            <div className="flex gap-2">
+                              {asanaAccessToken && (
+                                <Button onClick={() => saveAsanaSettingsMutation.mutate({ accessToken: asanaAccessToken })} disabled={saveAsanaSettingsMutation.isPending} data-testid="button-save-asana">
+                                  {saveAsanaSettingsMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}Save Token
+                                </Button>
+                              )}
+                              {asanaSettings?.hasAccessToken && (
+                                <Button variant="outline" onClick={() => testAsanaConnectionMutation.mutate()} disabled={testAsanaConnectionMutation.isPending} data-testid="button-test-asana">
+                                  {testAsanaConnectionMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}Test Connection
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {asanaSettings?.hasAccessToken ? (
+                      <div className="space-y-2 text-sm">
+                        <div className="flex items-center gap-2 text-green-600"><CheckCircle2 className="w-4 h-4" />Connected</div>
+                        {asanaSettings.workspaceName && <p className="text-muted-foreground">Workspace: {asanaSettings.workspaceName}</p>}
+                        {asanaSettings.defaultProjectName && <p className="text-muted-foreground">Project: {asanaSettings.defaultProjectName}</p>}
+                        {asanaSettings.lastSyncAt && <p className="text-xs text-muted-foreground">Last sync: {new Date(asanaSettings.lastSyncAt).toLocaleString()}</p>}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Connect Asana to sync opportunities as tasks.</p>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Pipeline Stats */}
+                <Card>
+                  <CardHeader><CardTitle className="font-serif text-base">Pipeline by Stage</CardTitle></CardHeader>
+                  <CardContent className="space-y-2">
+                    {CONTRACTING_STAGES.map(stage => {
+                      const count = clients.filter(c => c.contractingStage === stage.value).length;
+                      return (
+                        <div key={stage.value} className="flex items-center justify-between p-2 bg-slate-50 rounded cursor-pointer hover:bg-slate-100" onClick={() => setStageFilter(stage.value)} data-testid={`stage-stat-${stage.value}`}>
+                          <span className="text-sm">{stage.label}</span>
+                          <Badge variant="secondary">{count}</Badge>
+                        </div>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+                
+                {/* Quick Stats */}
+                <Card>
+                  <CardHeader><CardTitle className="font-serif text-base">Quick Stats</CardTitle></CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center justify-between p-2 bg-slate-50 rounded-lg"><span className="text-sm">Total Opportunities</span><span className="font-bold">{clients.length}</span></div>
+                    <div className="flex items-center justify-between p-2 bg-slate-50 rounded-lg"><span className="text-sm">Active Solicitations</span><span className="font-bold text-amber-600">{clients.filter(c => c.contractingStage === "solicitation").length}</span></div>
+                    <div className="flex items-center justify-between p-2 bg-slate-50 rounded-lg"><span className="text-sm">Awards</span><span className="font-bold text-green-600">{clients.filter(c => c.contractingStage === "award" || c.contractingStage === "post_award").length}</span></div>
                   </CardContent>
                 </Card>
                 

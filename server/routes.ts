@@ -1,17 +1,16 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { isAuthenticated } from "./replit_integrations/auth";
+import { requireAuth } from "./auth";
 import { insertWorkflowProgressSchema, insertArtifactSchema } from "@shared/schema";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // Workflow Progress Routes
-  app.get("/api/workflow/progress", isAuthenticated, async (req: any, res) => {
+  app.get("/api/workflow/progress", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.session.userId;
       const progress = await storage.getWorkflowProgress(userId);
       res.json(progress);
     } catch (error) {
@@ -20,9 +19,9 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/workflow/progress", isAuthenticated, async (req: any, res) => {
+  app.post("/api/workflow/progress", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.session.userId;
       const data = insertWorkflowProgressSchema.parse({ ...req.body, userId });
       const progress = await storage.upsertWorkflowProgress(data);
       res.json(progress);
@@ -32,10 +31,9 @@ export async function registerRoutes(
     }
   });
 
-  // Artifacts Routes
-  app.get("/api/artifacts", isAuthenticated, async (req: any, res) => {
+  app.get("/api/artifacts", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.session.userId;
       const componentId = req.query.componentId as string | undefined;
       
       const artifacts = componentId 
@@ -49,9 +47,9 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/artifacts", isAuthenticated, async (req: any, res) => {
+  app.post("/api/artifacts", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.session.userId;
       const data = insertArtifactSchema.parse({ ...req.body, userId });
       const artifact = await storage.upsertArtifact(data);
       res.json(artifact);
@@ -61,9 +59,9 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/artifacts/:id", isAuthenticated, async (req: any, res) => {
+  app.delete("/api/artifacts/:id", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.session.userId;
       await storage.deleteArtifact(req.params.id, userId);
       res.json({ success: true });
     } catch (error) {

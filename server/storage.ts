@@ -7,12 +7,10 @@ import { db } from "./db";
 import { eq, and } from "drizzle-orm";
 
 export interface IStorage {
-  // Workflow Progress
   getWorkflowProgress(userId: string): Promise<WorkflowProgress[]>;
-  getWorkflowProgressByComponent(userId: string, componentId: string): Promise<WorkflowProgress | undefined>;
+  getWorkflowProgressByStage(userId: string, componentId: string, stage: string): Promise<WorkflowProgress | undefined>;
   upsertWorkflowProgress(progress: InsertWorkflowProgress): Promise<WorkflowProgress>;
   
-  // Artifacts
   getArtifacts(userId: string): Promise<Artifact[]>;
   getArtifactsByComponent(userId: string, componentId: string): Promise<Artifact[]>;
   upsertArtifact(artifact: InsertArtifact): Promise<Artifact>;
@@ -24,32 +22,51 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(workflowProgress).where(eq(workflowProgress.userId, userId));
   }
 
-  async getWorkflowProgressByComponent(userId: string, componentId: string): Promise<WorkflowProgress | undefined> {
+  async getWorkflowProgressByStage(userId: string, componentId: string, stage: string): Promise<WorkflowProgress | undefined> {
     const [progress] = await db.select().from(workflowProgress)
-      .where(and(eq(workflowProgress.userId, userId), eq(workflowProgress.componentId, componentId)));
+      .where(and(
+        eq(workflowProgress.userId, userId), 
+        eq(workflowProgress.componentId, componentId),
+        eq(workflowProgress.stage, stage)
+      ));
     return progress;
   }
 
   async upsertWorkflowProgress(progress: InsertWorkflowProgress): Promise<WorkflowProgress> {
-    // Check if exists
-    const existing = await this.getWorkflowProgressByComponent(progress.userId, progress.componentId);
+    const existing = await this.getWorkflowProgressByStage(progress.userId, progress.componentId, progress.stage);
     
     if (existing) {
+      const effectiveCompleted = progress.completed ?? existing.completed ?? false;
+      const wasCompletedBefore = existing.completed ?? false;
+      
+      let completedAt = existing.completedAt;
+      if (effectiveCompleted && !wasCompletedBefore) {
+        completedAt = new Date();
+      } else if (!effectiveCompleted) {
+        completedAt = null;
+      }
+      
       const [updated] = await db.update(workflowProgress)
         .set({
-          ...progress,
+          completed: effectiveCompleted,
+          notes: progress.notes ?? existing.notes,
           updatedAt: new Date(),
-          completedAt: progress.completed ? new Date() : null,
+          completedAt,
         })
         .where(eq(workflowProgress.id, existing.id))
         .returning();
       return updated;
     }
     
+    const effectiveCompleted = progress.completed ?? false;
     const [created] = await db.insert(workflowProgress)
       .values({
-        ...progress,
-        completedAt: progress.completed ? new Date() : null,
+        userId: progress.userId,
+        componentId: progress.componentId,
+        stage: progress.stage,
+        completed: effectiveCompleted,
+        notes: progress.notes ?? "",
+        completedAt: effectiveCompleted ? new Date() : null,
       })
       .returning();
     return created;
@@ -65,7 +82,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertArtifact(artifact: InsertArtifact): Promise<Artifact> {
-    // Check if exists by type and component
     const [existing] = await db.select().from(artifacts)
       .where(and(
         eq(artifacts.userId, artifact.userId),
@@ -76,7 +92,8 @@ export class DatabaseStorage implements IStorage {
     if (existing) {
       const [updated] = await db.update(artifacts)
         .set({
-          ...artifact,
+          title: artifact.title ?? existing.title,
+          content: artifact.content ?? existing.content,
           updatedAt: new Date(),
         })
         .where(eq(artifacts.id, existing.id))
@@ -85,7 +102,13 @@ export class DatabaseStorage implements IStorage {
     }
     
     const [created] = await db.insert(artifacts)
-      .values(artifact)
+      .values({
+        userId: artifact.userId,
+        componentId: artifact.componentId,
+        artifactType: artifact.artifactType,
+        title: artifact.title,
+        content: artifact.content ?? "",
+      })
       .returning();
     return created;
   }

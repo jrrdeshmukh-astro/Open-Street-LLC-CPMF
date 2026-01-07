@@ -5,7 +5,8 @@ import { requireAuth } from "./auth";
 import { 
   insertWorkflowProgressSchema, insertArtifactSchema, insertClientSchema,
   insertTimeEntrySchema, insertActionSchema, insertInvoiceSchema, insertInvoiceItemSchema,
-  insertDebriefTemplateSchema, insertDebriefRecordSchema, insertMessageSchema
+  insertDebriefTemplateSchema, insertDebriefRecordSchema, insertMessageSchema,
+  insertGuideSchema, insertFormTemplateSchema, insertFormSubmissionSchema
 } from "@shared/schema";
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
@@ -332,6 +333,94 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ message: "Failed to mark message as read" });
+    }
+  });
+
+  // Guides
+  app.get("/api/guides", async (req: any, res) => {
+    try {
+      const componentId = req.query.componentId as string | undefined;
+      const stage = req.query.stage as string | undefined;
+      const guides = componentId
+        ? await storage.getGuidesByComponent(componentId, stage)
+        : await storage.getGuides();
+      res.json(guides);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch guides" });
+    }
+  });
+
+  app.post("/api/guides", requireAuth, async (req: any, res) => {
+    try {
+      const data = insertGuideSchema.parse(req.body);
+      const guide = await storage.createGuide(data);
+      res.json(guide);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create guide" });
+    }
+  });
+
+  // Form Templates
+  app.get("/api/form-templates", async (req: any, res) => {
+    try {
+      const componentId = req.query.componentId as string | undefined;
+      const stage = req.query.stage as string | undefined;
+      const templates = componentId
+        ? await storage.getFormTemplatesByComponent(componentId, stage)
+        : await storage.getFormTemplates();
+      res.json(templates);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch form templates" });
+    }
+  });
+
+  app.get("/api/form-templates/:id", async (req: any, res) => {
+    try {
+      const template = await storage.getFormTemplate(req.params.id);
+      res.json(template);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch form template" });
+    }
+  });
+
+  // Form Submissions
+  app.get("/api/form-submissions", requireAuth, async (req: any, res) => {
+    try {
+      const templateId = req.query.templateId as string | undefined;
+      const submissions = templateId
+        ? await storage.getFormSubmissionsByTemplate(req.session.userId, templateId)
+        : await storage.getFormSubmissions(req.session.userId);
+      res.json(submissions);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch submissions" });
+    }
+  });
+
+  app.post("/api/form-submissions", requireAuth, async (req: any, res) => {
+    try {
+      const data = insertFormSubmissionSchema.parse({ ...req.body, userId: req.session.userId });
+      const submission = await storage.createFormSubmission(data);
+      res.json(submission);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create submission" });
+    }
+  });
+
+  app.patch("/api/form-submissions/:id", requireAuth, async (req: any, res) => {
+    try {
+      const submission = await storage.updateFormSubmission(req.params.id, req.session.userId, req.body);
+      res.json(submission);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update submission" });
+    }
+  });
+
+  app.post("/api/form-submissions/:id/submit", requireAuth, async (req: any, res) => {
+    try {
+      const submission = await storage.submitFormSubmission(req.params.id, req.session.userId);
+      res.json(submission);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to submit form" });
     }
   });
 

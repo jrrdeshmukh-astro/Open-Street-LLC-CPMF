@@ -141,6 +141,55 @@ export const debriefRecords = pgTable("debrief_records", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Guides for knowledge/documentation
+export const guides = pgTable("guides", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  componentId: varchar("component_id").notNull(),
+  stage: varchar("stage").notNull(),
+  title: varchar("title").notNull(),
+  summary: text("summary"),
+  content: text("content").notNull(), // Markdown content
+  roleVisibility: text("role_visibility"), // JSON array of roles that can see this guide
+  orderIndex: integer("order_index").default(0),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Form templates for actionable forms
+export const formTemplates = pgTable("form_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  componentId: varchar("component_id").notNull(),
+  stage: varchar("stage").notNull(),
+  title: varchar("title").notNull(),
+  description: text("description"),
+  formSchema: text("form_schema").notNull(), // JSON schema for form fields
+  roleVisibility: text("role_visibility"), // JSON array of roles
+  artifactType: varchar("artifact_type"), // Links to artifact creation
+  orderIndex: integer("order_index").default(0),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Form submissions (completed forms)
+export const formSubmissions = pgTable("form_submissions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  templateId: varchar("template_id").notNull(),
+  userId: varchar("user_id").notNull(),
+  clientId: varchar("client_id"),
+  componentId: varchar("component_id").notNull(),
+  stage: varchar("stage").notNull(),
+  responses: text("responses").notNull(), // JSON object with form responses
+  status: varchar("status").default("draft"), // draft, submitted, approved, rejected
+  submittedAt: timestamp("submitted_at"),
+  reviewedBy: varchar("reviewed_by"),
+  reviewedAt: timestamp("reviewed_at"),
+  reviewNotes: text("review_notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [index("idx_form_submissions_user").on(table.userId)]);
+
 // Messages for async communication
 export const messages = pgTable("messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -214,6 +263,24 @@ export const insertMessageSchema = createInsertSchema(messages).omit({
   updatedAt: true,
 });
 
+export const insertGuideSchema = createInsertSchema(guides).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertFormTemplateSchema = createInsertSchema(formTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertFormSubmissionSchema = createInsertSchema(formSubmissions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type WorkflowProgress = typeof workflowProgress.$inferSelect;
 export type InsertWorkflowProgress = z.infer<typeof insertWorkflowProgressSchema>;
@@ -235,3 +302,9 @@ export type DebriefRecord = typeof debriefRecords.$inferSelect;
 export type InsertDebriefRecord = z.infer<typeof insertDebriefRecordSchema>;
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
+export type Guide = typeof guides.$inferSelect;
+export type InsertGuide = z.infer<typeof insertGuideSchema>;
+export type FormTemplate = typeof formTemplates.$inferSelect;
+export type InsertFormTemplate = z.infer<typeof insertFormTemplateSchema>;
+export type FormSubmission = typeof formSubmissions.$inferSelect;
+export type InsertFormSubmission = z.infer<typeof insertFormSubmissionSchema>;

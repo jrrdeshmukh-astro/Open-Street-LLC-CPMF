@@ -42,6 +42,19 @@ export const clients = pgTable("clients", {
   notes: text("notes"),
   intakeData: text("intake_data"), // JSON string for flexible intake form responses
   status: varchar("status").default("active"), // active, completed, archived
+  // Government contracting stages (SAM.gov)
+  contractingStage: varchar("contracting_stage").default("sources_sought"), // sources_sought, rfi, presolicitation, solicitation, award, post_award, completed
+  contractingStageHistory: text("contracting_stage_history"), // JSON: [{stage, date, notes}]
+  samOpportunityId: varchar("sam_opportunity_id"), // SAM.gov opportunity ID
+  naicsCode: varchar("naics_code"), // NAICS code for the opportunity
+  pscCode: varchar("psc_code"), // Product Service Code
+  setAside: varchar("set_aside"), // small_business, sdvosb, wosb, hubzone, 8a, none
+  estimatedValue: varchar("estimated_value"), // Estimated contract value
+  responseDeadline: timestamp("response_deadline"), // Deadline for response
+  // Asana integration
+  asanaProjectId: varchar("asana_project_id"),
+  asanaTaskId: varchar("asana_task_id"),
+  asanaSyncedAt: timestamp("asana_synced_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -329,6 +342,23 @@ export const sessionActivities = pgTable("session_activities", {
   index("idx_session_activities_session").on(table.sessionId),
 ]);
 
+// Asana settings for CRM integration
+export const asanaSettings = pgTable("asana_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().unique(),
+  accessToken: varchar("access_token"), // Asana Personal Access Token
+  workspaceId: varchar("workspace_id"), // Asana workspace GID
+  workspaceName: varchar("workspace_name"),
+  defaultProjectId: varchar("default_project_id"), // Default project for new clients
+  defaultProjectName: varchar("default_project_name"),
+  syncEnabled: boolean("sync_enabled").default(true),
+  autoCreateTasks: boolean("auto_create_tasks").default(true), // Create Asana tasks for new clients
+  syncStages: boolean("sync_stages").default(true), // Sync contracting stages with Asana sections
+  lastSyncAt: timestamp("last_sync_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Collaborations - links industry partners and academia for shared workflows
 export const collaborations = pgTable("collaborations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -448,6 +478,12 @@ export const insertSessionActivitySchema = createInsertSchema(sessionActivities)
   createdAt: true,
 });
 
+export const insertAsanaSettingsSchema = createInsertSchema(asanaSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type WorkflowProgress = typeof workflowProgress.$inferSelect;
 export type InsertWorkflowProgress = z.infer<typeof insertWorkflowProgressSchema>;
@@ -483,6 +519,8 @@ export type SlackSettings = typeof slackSettings.$inferSelect;
 export type InsertSlackSettings = z.infer<typeof insertSlackSettingsSchema>;
 export type SessionActivity = typeof sessionActivities.$inferSelect;
 export type InsertSessionActivity = z.infer<typeof insertSessionActivitySchema>;
+export type AsanaSettings = typeof asanaSettings.$inferSelect;
+export type InsertAsanaSettings = z.infer<typeof insertAsanaSettingsSchema>;
 
 // Opportunity schemas
 export const insertOpportunitySchema = createInsertSchema(opportunities).omit({

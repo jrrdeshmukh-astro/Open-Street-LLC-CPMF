@@ -966,5 +966,164 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // Session Activity Tracking
+  app.post("/api/session-activity", requireAuth, async (req: any, res) => {
+    try {
+      const { activityType, entityType, entityId, entityName, description, metadata } = req.body;
+      const sessionId = req.sessionID || req.session.id || "unknown";
+      const activity = await storage.createSessionActivity({
+        userId: req.session.userId,
+        sessionId,
+        activityType,
+        entityType,
+        entityId,
+        entityName,
+        description,
+        metadata: metadata ? JSON.stringify(metadata) : null
+      });
+      res.json(activity);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to log activity" });
+    }
+  });
+
+  app.get("/api/session-summary", requireAuth, async (req: any, res) => {
+    try {
+      const sessionId = req.sessionID || req.session.id || "unknown";
+      const summary = await storage.getSessionSummary(req.session.userId, sessionId);
+      res.json(summary);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get session summary" });
+    }
+  });
+
+  // Slack Settings
+  app.get("/api/slack/settings", requireAuth, async (req: any, res) => {
+    try {
+      const settings = await storage.getSlackSettings(req.session.userId);
+      if (settings) {
+        const { botToken, ...safeSettings } = settings;
+        res.json({ ...safeSettings, hasBotToken: !!botToken });
+      } else {
+        res.json(null);
+      }
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch Slack settings" });
+    }
+  });
+
+  app.put("/api/slack/settings", requireAuth, async (req: any, res) => {
+    try {
+      const { webhookUrl, botToken, defaultChannelId, defaultChannelName, syncEnabled, notifyOnNewMessage, workspaceName } = req.body;
+      const settings = await storage.upsertSlackSettings({
+        userId: req.session.userId,
+        webhookUrl,
+        botToken,
+        defaultChannelId,
+        defaultChannelName,
+        syncEnabled,
+        notifyOnNewMessage,
+        workspaceName
+      });
+      const { botToken: token, ...safeSettings } = settings;
+      res.json({ ...safeSettings, hasBotToken: !!token });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to save Slack settings" });
+    }
+  });
+
+  app.delete("/api/slack/settings", requireAuth, async (req: any, res) => {
+    try {
+      await storage.deleteSlackSettings(req.session.userId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete Slack settings" });
+    }
+  });
+
+  app.post("/api/slack/test", requireAuth, async (req: any, res) => {
+    try {
+      const settings = await storage.getSlackSettings(req.session.userId);
+      if (!settings?.webhookUrl) {
+        return res.status(400).json({ message: "Slack webhook not configured" });
+      }
+
+      const response = await fetch(settings.webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: "Test message from Open Street CPMF" })
+      });
+
+      if (response.ok) {
+        res.json({ success: true, message: "Test message sent successfully" });
+      } else {
+        res.status(400).json({ message: "Failed to send test message" });
+      }
+    } catch (error) {
+      res.status(500).json({ message: "Failed to test Slack connection" });
+    }
+  });
+
+  app.post("/api/slack/send", requireAuth, async (req: any, res) => {
+    try {
+      const { messageId, channelId } = req.body;
+      const settings = await storage.getSlackSettings(req.session.userId);
+      if (!settings?.webhookUrl) {
+        return res.status(400).json({ message: "Slack webhook not configured" });
+      }
+
+      const message = await storage.getMessage(messageId, req.session.userId);
+      if (!message) {
+        return res.status(404).json({ message: "Message not found" });
+      }
+
+      const slackMessage = {
+        text: message.subject ? `*${message.subject}*\n${message.content}` : message.content,
+        channel: channelId || settings.defaultChannelId
+      };
+
+      const response = await fetch(settings.webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(slackMessage)
+      });
+
+      if (response.ok) {
+        await storage.updateMessageSlackInfo(messageId, {
+          slackChannelId: channelId || settings.defaultChannelId,
+          slackSyncedAt: new Date()
+        });
+        res.json({ success: true });
+      } else {
+        res.status(400).json({ message: "Failed to send to Slack" });
+      }
+    } catch (error) {
+      res.status(500).json({ message: "Failed to send message to Slack" });
+    }
+  });
+
+  // Message delivery tracking
+  app.patch("/api/messages/:id/delivery", requireAuth, async (req: any, res) => {
+    try {
+      const { status } = req.body;
+      if (!["sent", "delivered", "read", "failed"].includes(status)) {
+        return res.status(400).json({ message: "Invalid delivery status" });
+      }
+      const message = await storage.updateMessageDelivery(req.params.id, req.session.userId, status);
+      res.json(message);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update message delivery status" });
+    }
+  });
+
+  app.get("/api/messages/with-delivery", requireAuth, async (req: any, res) => {
+    try {
+      const messages = await storage.getMessagesWithDeliveryStatus(req.session.userId);
+      res.json(messages);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch messages" });
+    }
+  });
+
   return httpServer;
 }

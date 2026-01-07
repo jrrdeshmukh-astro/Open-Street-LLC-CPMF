@@ -1,6 +1,7 @@
 import { 
   workflowProgress, artifacts, clients, timeEntries, actions, invoices, invoiceItems, debriefTemplates, debriefRecords, messages,
   guides, formTemplates, formSubmissions, opportunities, workflowTemplates, workflowInstances, collaborations, jiraSettings,
+  slackSettings, sessionActivities,
   type WorkflowProgress, type InsertWorkflowProgress,
   type Artifact, type InsertArtifact,
   type Client, type InsertClient,
@@ -18,7 +19,9 @@ import {
   type WorkflowTemplate, type InsertWorkflowTemplate,
   type WorkflowInstance, type InsertWorkflowInstance,
   type Collaboration, type InsertCollaboration,
-  type JiraSettings, type InsertJiraSettings
+  type JiraSettings, type InsertJiraSettings,
+  type SlackSettings, type InsertSlackSettings,
+  type SessionActivity, type InsertSessionActivity
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc, or, inArray } from "drizzle-orm";
@@ -544,6 +547,102 @@ export class DatabaseStorage {
     const [action] = await db.select().from(actions)
       .where(and(eq(actions.jiraIssueId, jiraIssueId), eq(actions.userId, userId)));
     return action;
+  }
+
+  // Session Activities - for logout summary
+  async createSessionActivity(activity: InsertSessionActivity): Promise<SessionActivity> {
+    const [created] = await db.insert(sessionActivities).values(activity).returning();
+    return created;
+  }
+
+  async getSessionActivities(userId: string, sessionId: string): Promise<SessionActivity[]> {
+    return await db.select().from(sessionActivities)
+      .where(and(eq(sessionActivities.userId, userId), eq(sessionActivities.sessionId, sessionId)))
+      .orderBy(desc(sessionActivities.createdAt));
+  }
+
+  async getSessionSummary(userId: string, sessionId: string): Promise<{
+    activityCount: number;
+    activities: SessionActivity[];
+    summary: { [key: string]: number };
+  }> {
+    const activities = await this.getSessionActivities(userId, sessionId);
+    const summary: { [key: string]: number } = {};
+    activities.forEach(a => {
+      const key = `${a.activityType}_${a.entityType}`;
+      summary[key] = (summary[key] || 0) + 1;
+    });
+    return { activityCount: activities.length, activities, summary };
+  }
+
+  async deleteSessionActivities(userId: string, sessionId: string): Promise<void> {
+    await db.delete(sessionActivities)
+      .where(and(eq(sessionActivities.userId, userId), eq(sessionActivities.sessionId, sessionId)));
+  }
+
+  // Slack Settings
+  async getSlackSettings(userId: string): Promise<SlackSettings | undefined> {
+    const [settings] = await db.select().from(slackSettings).where(eq(slackSettings.userId, userId));
+    return settings;
+  }
+
+  async upsertSlackSettings(settings: InsertSlackSettings): Promise<SlackSettings> {
+    const existing = await this.getSlackSettings(settings.userId);
+    if (existing) {
+      const [updated] = await db.update(slackSettings)
+        .set({ ...settings, updatedAt: new Date() })
+        .where(eq(slackSettings.userId, settings.userId))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(slackSettings).values(settings).returning();
+    return created;
+  }
+
+  async deleteSlackSettings(userId: string): Promise<void> {
+    await db.delete(slackSettings).where(eq(slackSettings.userId, userId));
+  }
+
+  // Message delivery tracking
+  async updateMessageDelivery(messageId: string, userId: string, status: "sent" | "delivered" | "read" | "failed"): Promise<Message> {
+    const updates: any = { deliveryStatus: status, updatedAt: new Date() };
+    if (status === "delivered") updates.deliveredAt = new Date();
+    if (status === "read") {
+      updates.deliveredAt = updates.deliveredAt || new Date();
+      updates.readAt = new Date();
+    }
+    const [updated] = await db.update(messages)
+      .set(updates)
+      .where(and(eq(messages.id, messageId), eq(messages.userId, userId)))
+      .returning();
+    return updated;
+  }
+
+  async markMessageAsRead(messageId: string): Promise<Message | undefined> {
+    const [updated] = await db.update(messages)
+      .set({ readAt: new Date(), deliveryStatus: "read", deliveredAt: new Date(), updatedAt: new Date() })
+      .where(eq(messages.id, messageId))
+      .returning();
+    return updated;
+  }
+
+  async getMessagesWithDeliveryStatus(userId: string): Promise<Message[]> {
+    return await db.select().from(messages)
+      .where(or(eq(messages.userId, userId), eq(messages.recipientId, userId)))
+      .orderBy(desc(messages.createdAt));
+  }
+
+  // Slack sync for messages
+  async updateMessageSlackInfo(messageId: string, slackInfo: {
+    slackChannelId?: string;
+    slackMessageTs?: string;
+    slackSyncedAt?: Date;
+  }): Promise<Message> {
+    const [updated] = await db.update(messages)
+      .set({ ...slackInfo, updatedAt: new Date() })
+      .where(eq(messages.id, messageId))
+      .returning();
+    return updated;
   }
 }
 

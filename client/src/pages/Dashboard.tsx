@@ -86,12 +86,88 @@ export default function Dashboard() {
   const [jiraApiToken, setJiraApiToken] = useState("");
   const [jiraDefaultProject, setJiraDefaultProject] = useState("");
 
+  // Session activity & logout summary state
+  const [logoutSummaryOpen, setLogoutSummaryOpen] = useState(false);
+  const [sessionSummary, setSessionSummary] = useState<{ activityCount: number; activities: any[]; summary: Record<string, number> } | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  // Slack integration state
+  const [slackSettingsOpen, setSlackSettingsOpen] = useState(false);
+  const [slackWebhookUrl, setSlackWebhookUrl] = useState("");
+  const [slackChannelName, setSlackChannelName] = useState("");
+  const [slackWorkspaceName, setSlackWorkspaceName] = useState("");
+
   // Jira queries
   const { data: jiraSettings } = useQuery<any>({ queryKey: ["/api/jira/settings"], enabled: !!user });
   const { data: jiraProjects = [] } = useQuery<{ id: string; key: string; name: string }[]>({ 
     queryKey: ["/api/jira/projects"], 
     enabled: !!user && !!jiraSettings?.hasApiToken 
   });
+
+  // Slack queries
+  const { data: slackSettings } = useQuery<any>({ queryKey: ["/api/slack/settings"], enabled: !!user });
+
+  // Slack mutations
+  const saveSlackSettingsMutation = useMutation({
+    mutationFn: async (data: { webhookUrl?: string; defaultChannelName?: string; workspaceName?: string; syncEnabled?: boolean }) => {
+      const res = await fetch("/api/slack/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data), credentials: "include" });
+      if (!res.ok) throw new Error("Failed to save");
+      return res.json();
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/slack/settings"] }); toast({ title: "Slack settings saved" }); setSlackSettingsOpen(false); },
+    onError: () => toast({ title: "Failed to save Slack settings", variant: "destructive" }),
+  });
+
+  const testSlackConnectionMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/slack/test", { method: "POST", credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: () => toast({ title: "Test message sent to Slack!" }),
+    onError: () => toast({ title: "Failed to send test message", variant: "destructive" }),
+  });
+
+  const sendToSlackMutation = useMutation({
+    mutationFn: async (messageId: string) => {
+      const res = await fetch("/api/slack/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messageId }), credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/messages"] }); toast({ title: "Message sent to Slack" }); },
+    onError: () => toast({ title: "Failed to send to Slack", variant: "destructive" }),
+  });
+
+  // Session activity - log actions
+  const logActivity = async (activityType: string, entityType: string, entityId?: string, entityName?: string, description?: string) => {
+    try {
+      await fetch("/api/session-activity", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activityType, entityType, entityId, entityName, description }), credentials: "include" });
+    } catch (e) { /* silent fail */ }
+  };
+
+  // Enhanced logout with session summary
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      const res = await fetch("/api/session-summary", { credentials: "include" });
+      if (res.ok) {
+        const summary = await res.json();
+        setSessionSummary(summary);
+        setLogoutSummaryOpen(true);
+      } else {
+        logout();
+      }
+    } catch {
+      logout();
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
+  const confirmLogout = () => {
+    setLogoutSummaryOpen(false);
+    logout();
+  };
 
   const progressMutation = useMutation({
     mutationFn: async (data: { componentId: string; stage: string; completed: boolean; notes?: string }) => {
@@ -108,7 +184,7 @@ export default function Dashboard() {
       if (!res.ok) throw new Error("Failed to create client");
       return res.json();
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/clients"] }); toast({ title: "Client created" }); },
+    onSuccess: (data) => { queryClient.invalidateQueries({ queryKey: ["/api/clients"] }); toast({ title: "Client created" }); logActivity("create", "client", data.id, data.name, "Created a new client"); },
   });
 
   const timeEntryMutation = useMutation({
@@ -126,7 +202,7 @@ export default function Dashboard() {
       if (!res.ok) throw new Error("Failed to create action");
       return res.json();
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/actions"] }); toast({ title: "Action created" }); },
+    onSuccess: (data) => { queryClient.invalidateQueries({ queryKey: ["/api/actions"] }); toast({ title: "Action created" }); logActivity("create", "action", data.id, data.title, "Created a new action"); },
   });
 
   const messageMutation = useMutation({
@@ -395,7 +471,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-4">
             <span className="text-sm text-slate-300">Welcome, {user.firstName || user.email}</span>
             <Link href="/" className="text-sm text-slate-300 hover:text-white flex items-center gap-1" data-testid="link-home"><Home className="w-4 h-4" /> Home</Link>
-            <button onClick={() => logout()} className="text-sm text-slate-300 hover:text-white flex items-center gap-1" data-testid="button-logout"><LogOut className="w-4 h-4" /> Logout</button>
+            <button onClick={handleLogout} disabled={isLoggingOut} className="text-sm text-slate-300 hover:text-white flex items-center gap-1" data-testid="button-logout">{isLoggingOut ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />} Logout</button>
           </div>
         </div>
       </header>
@@ -1075,35 +1151,99 @@ export default function Dashboard() {
 
           {/* Messages Tab */}
           <TabsContent value="messages">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="font-serif">Async Communication</CardTitle>
-                <Dialog>
-                  <DialogTrigger asChild><Button data-testid="button-new-message"><Plus className="w-4 h-4 mr-2" />New Message</Button></DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader><DialogTitle>Send Message</DialogTitle></DialogHeader>
-                    <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); messageMutation.mutate({ subject: fd.get("subject") as string, content: fd.get("content") as string }); }} className="space-y-4">
-                      <div className="space-y-2"><Label>Subject</Label><Input name="subject" data-testid="input-message-subject" /></div>
-                      <div className="space-y-2"><Label>Message</Label><Textarea name="content" required placeholder="Type your message..." data-testid="textarea-message-content" /></div>
-                      <Button type="submit" className="w-full" disabled={messageMutation.isPending} data-testid="button-send-message">Send Message</Button>
-                    </form>
-                  </DialogContent>
-                </Dialog>
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-[400px]">
-                  <div className="space-y-3">
-                    {messages.length === 0 ? <p className="text-center text-muted-foreground py-8">No messages yet.</p> : messages.map((message) => (
-                      <div key={message.id} className={`p-4 rounded-lg border ${message.readAt ? "border-slate-200" : "border-primary bg-primary/5"}`} data-testid={`message-${message.id}`}>
-                        <div className="flex items-center justify-between mb-2"><span className="font-medium">{message.subject || "No Subject"}</span>{!message.readAt && <Badge>New</Badge>}</div>
-                        <p className="text-sm text-muted-foreground mb-2">{message.content}</p>
-                        <span className="text-xs text-muted-foreground">{new Date(message.createdAt!).toLocaleString()}</span>
-                      </div>
-                    ))}
+            <div className="space-y-4">
+              {/* Slack Integration Panel */}
+              <Card className="border-purple-200 bg-purple-50/30">
+                <CardHeader className="py-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <MessageSquare className="w-5 h-5 text-purple-600" />
+                      <span className="font-medium">Slack Integration</span>
+                      {slackSettings?.webhookUrl ? (
+                        <Badge variant="outline" className="border-green-500 text-green-700">Connected</Badge>
+                      ) : (
+                        <Badge variant="outline" className="border-slate-400 text-slate-600">Not Connected</Badge>
+                      )}
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => {
+                      setSlackWebhookUrl(slackSettings?.webhookUrl || "");
+                      setSlackChannelName(slackSettings?.defaultChannelName || "");
+                      setSlackWorkspaceName(slackSettings?.workspaceName || "");
+                      setSlackSettingsOpen(true);
+                    }} data-testid="button-slack-settings">
+                      {slackSettings?.webhookUrl ? "Update Settings" : "Connect Slack"}
+                    </Button>
                   </div>
-                </ScrollArea>
-              </CardContent>
-            </Card>
+                </CardHeader>
+                {slackSettings?.webhookUrl && (
+                  <CardContent className="pt-0">
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                      <span>Workspace: {slackSettings.workspaceName || "Connected"}</span>
+                      {slackSettings.defaultChannelName && <span>Channel: #{slackSettings.defaultChannelName}</span>}
+                      <Button variant="ghost" size="sm" onClick={() => testSlackConnectionMutation.mutate()} disabled={testSlackConnectionMutation.isPending} data-testid="button-test-slack">
+                        {testSlackConnectionMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Test Connection"}
+                      </Button>
+                    </div>
+                  </CardContent>
+                )}
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="font-serif">Async Communication</CardTitle>
+                  <Dialog>
+                    <DialogTrigger asChild><Button data-testid="button-new-message"><Plus className="w-4 h-4 mr-2" />New Message</Button></DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader><DialogTitle>Send Message</DialogTitle></DialogHeader>
+                      <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); messageMutation.mutate({ subject: fd.get("subject") as string, content: fd.get("content") as string }); logActivity("create", "message", undefined, fd.get("subject") as string, "Sent a message"); }} className="space-y-4">
+                        <div className="space-y-2"><Label>Subject</Label><Input name="subject" data-testid="input-message-subject" /></div>
+                        <div className="space-y-2"><Label>Message</Label><Textarea name="content" required placeholder="Type your message..." data-testid="textarea-message-content" /></div>
+                        <Button type="submit" className="w-full" disabled={messageMutation.isPending} data-testid="button-send-message">Send Message</Button>
+                      </form>
+                    </DialogContent>
+                  </Dialog>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[400px]">
+                    <div className="space-y-3">
+                      {messages.length === 0 ? <p className="text-center text-muted-foreground py-8">No messages yet.</p> : messages.map((message: any) => (
+                        <div key={message.id} className={`p-4 rounded-lg border ${message.readAt ? "border-slate-200" : "border-primary bg-primary/5"}`} data-testid={`message-${message.id}`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-medium">{message.subject || "No Subject"}</span>
+                            <div className="flex items-center gap-2">
+                              {/* Delivery Status Badge */}
+                              {message.deliveryStatus && (
+                                <Badge variant="outline" className={
+                                  message.deliveryStatus === "read" ? "border-green-500 text-green-700" :
+                                  message.deliveryStatus === "delivered" ? "border-blue-500 text-blue-700" :
+                                  message.deliveryStatus === "failed" ? "border-red-500 text-red-700" :
+                                  "border-slate-400 text-slate-600"
+                                }>
+                                  {message.deliveryStatus === "read" ? "Read" : message.deliveryStatus === "delivered" ? "Delivered" : message.deliveryStatus === "failed" ? "Failed" : "Sent"}
+                                </Badge>
+                              )}
+                              {/* Slack Badge */}
+                              {message.slackSyncedAt && (
+                                <Badge variant="outline" className="border-purple-500 text-purple-700">Slack</Badge>
+                              )}
+                              {!message.readAt && <Badge>New</Badge>}
+                              {/* Send to Slack Button */}
+                              {slackSettings?.webhookUrl && !message.slackSyncedAt && (
+                                <Button variant="ghost" size="sm" onClick={() => sendToSlackMutation.mutate(message.id)} disabled={sendToSlackMutation.isPending} data-testid={`button-send-slack-${message.id}`}>
+                                  <MessageSquare className="w-4 h-4 text-purple-600" />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-2">{message.content}</p>
+                          <span className="text-xs text-muted-foreground">{new Date(message.createdAt!).toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
 
@@ -1141,6 +1281,102 @@ export default function Dashboard() {
                 {formSubmissionMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                 Submit Form
               </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Slack Settings Dialog */}
+        <Dialog open={slackSettingsOpen} onOpenChange={setSlackSettingsOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-purple-600" />
+                Slack Integration Settings
+              </DialogTitle>
+              <DialogDescription>Connect your Slack workspace to send messages directly to a channel.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Workspace Name</Label>
+                <Input value={slackWorkspaceName} onChange={(e) => setSlackWorkspaceName(e.target.value)} placeholder="e.g., My Company" data-testid="input-slack-workspace" />
+              </div>
+              <div className="space-y-2">
+                <Label>Webhook URL</Label>
+                <Input value={slackWebhookUrl} onChange={(e) => setSlackWebhookUrl(e.target.value)} placeholder="https://hooks.slack.com/services/..." data-testid="input-slack-webhook" />
+                <p className="text-xs text-muted-foreground">Create an incoming webhook at <a href="https://api.slack.com/messaging/webhooks" target="_blank" rel="noopener" className="text-purple-600 hover:underline">api.slack.com</a></p>
+              </div>
+              <div className="space-y-2">
+                <Label>Default Channel Name</Label>
+                <Input value={slackChannelName} onChange={(e) => setSlackChannelName(e.target.value)} placeholder="e.g., general" data-testid="input-slack-channel" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setSlackSettingsOpen(false)}>Cancel</Button>
+              <Button onClick={() => saveSlackSettingsMutation.mutate({ webhookUrl: slackWebhookUrl, defaultChannelName: slackChannelName, workspaceName: slackWorkspaceName })} disabled={saveSlackSettingsMutation.isPending} data-testid="button-save-slack">
+                {saveSlackSettingsMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                Save Settings
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Logout Session Summary Dialog */}
+        <Dialog open={logoutSummaryOpen} onOpenChange={setLogoutSummaryOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="font-serif">Session Summary</DialogTitle>
+              <DialogDescription>Here's what you accomplished during this session.</DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              {sessionSummary && (
+                <div className="space-y-4">
+                  <div className="text-center p-4 bg-primary/5 rounded-lg">
+                    <p className="text-3xl font-bold text-primary">{sessionSummary.activityCount}</p>
+                    <p className="text-sm text-muted-foreground">Total Activities</p>
+                  </div>
+                  {Object.keys(sessionSummary.summary).length > 0 && (
+                    <div className="space-y-2">
+                      <p className="font-medium text-sm">Activity Breakdown:</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {Object.entries(sessionSummary.summary).map(([key, count]) => {
+                          const [type, entity] = key.split("_");
+                          return (
+                            <div key={key} className="flex items-center justify-between p-2 bg-slate-50 rounded text-sm">
+                              <span className="capitalize">{entity || type}</span>
+                              <Badge variant="secondary">{count}</Badge>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {sessionSummary.activities.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="font-medium text-sm">Recent Activities:</p>
+                      <ScrollArea className="h-32">
+                        <div className="space-y-1">
+                          {sessionSummary.activities.slice(0, 5).map((activity: any) => (
+                            <div key={activity.id} className="text-xs text-muted-foreground p-2 bg-slate-50 rounded">
+                              <span className="capitalize font-medium">{activity.activityType}</span>
+                              {activity.entityType && <span className="mx-1">•</span>}
+                              {activity.entityName || activity.entityType}
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </div>
+                  )}
+                </div>
+              )}
+              {(!sessionSummary || sessionSummary.activityCount === 0) && (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p>No tracked activities this session.</p>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setLogoutSummaryOpen(false)}>Stay Logged In</Button>
+              <Button onClick={confirmLogout} data-testid="button-confirm-logout">Logout</Button>
             </div>
           </DialogContent>
         </Dialog>

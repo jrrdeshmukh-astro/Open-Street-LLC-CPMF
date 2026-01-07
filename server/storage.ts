@@ -1,34 +1,28 @@
 import { 
-  workflowProgress, artifacts,
+  workflowProgress, artifacts, clients, timeEntries, actions, invoices, invoiceItems, debriefTemplates, debriefRecords, messages,
   type WorkflowProgress, type InsertWorkflowProgress,
-  type Artifact, type InsertArtifact
+  type Artifact, type InsertArtifact,
+  type Client, type InsertClient,
+  type TimeEntry, type InsertTimeEntry,
+  type Action, type InsertAction,
+  type Invoice, type InsertInvoice,
+  type InvoiceItem, type InsertInvoiceItem,
+  type DebriefTemplate, type InsertDebriefTemplate,
+  type DebriefRecord, type InsertDebriefRecord,
+  type Message, type InsertMessage
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 
-export interface IStorage {
-  getWorkflowProgress(userId: string): Promise<WorkflowProgress[]>;
-  getWorkflowProgressByStage(userId: string, componentId: string, stage: string): Promise<WorkflowProgress | undefined>;
-  upsertWorkflowProgress(progress: InsertWorkflowProgress): Promise<WorkflowProgress>;
-  
-  getArtifacts(userId: string): Promise<Artifact[]>;
-  getArtifactsByComponent(userId: string, componentId: string): Promise<Artifact[]>;
-  upsertArtifact(artifact: InsertArtifact): Promise<Artifact>;
-  deleteArtifact(id: string, userId: string): Promise<void>;
-}
-
-export class DatabaseStorage implements IStorage {
+export class DatabaseStorage {
+  // Workflow Progress
   async getWorkflowProgress(userId: string): Promise<WorkflowProgress[]> {
     return await db.select().from(workflowProgress).where(eq(workflowProgress.userId, userId));
   }
 
   async getWorkflowProgressByStage(userId: string, componentId: string, stage: string): Promise<WorkflowProgress | undefined> {
     const [progress] = await db.select().from(workflowProgress)
-      .where(and(
-        eq(workflowProgress.userId, userId), 
-        eq(workflowProgress.componentId, componentId),
-        eq(workflowProgress.stage, stage)
-      ));
+      .where(and(eq(workflowProgress.userId, userId), eq(workflowProgress.componentId, componentId), eq(workflowProgress.stage, stage)));
     return progress;
   }
 
@@ -37,85 +31,206 @@ export class DatabaseStorage implements IStorage {
     
     if (existing) {
       const effectiveCompleted = progress.completed ?? existing.completed ?? false;
-      const wasCompletedBefore = existing.completed ?? false;
-      
       let completedAt = existing.completedAt;
-      if (effectiveCompleted && !wasCompletedBefore) {
-        completedAt = new Date();
-      } else if (!effectiveCompleted) {
-        completedAt = null;
-      }
+      if (effectiveCompleted && !existing.completed) completedAt = new Date();
+      else if (!effectiveCompleted) completedAt = null;
       
       const [updated] = await db.update(workflowProgress)
-        .set({
-          completed: effectiveCompleted,
-          notes: progress.notes ?? existing.notes,
-          updatedAt: new Date(),
-          completedAt,
-        })
-        .where(eq(workflowProgress.id, existing.id))
-        .returning();
+        .set({ completed: effectiveCompleted, notes: progress.notes ?? existing.notes, updatedAt: new Date(), completedAt })
+        .where(eq(workflowProgress.id, existing.id)).returning();
       return updated;
     }
     
-    const effectiveCompleted = progress.completed ?? false;
-    const [created] = await db.insert(workflowProgress)
-      .values({
-        userId: progress.userId,
-        componentId: progress.componentId,
-        stage: progress.stage,
-        completed: effectiveCompleted,
-        notes: progress.notes ?? "",
-        completedAt: effectiveCompleted ? new Date() : null,
-      })
-      .returning();
+    const [created] = await db.insert(workflowProgress).values({
+      userId: progress.userId, componentId: progress.componentId, stage: progress.stage,
+      completed: progress.completed ?? false, notes: progress.notes ?? "",
+      completedAt: progress.completed ? new Date() : null,
+    }).returning();
     return created;
   }
 
+  // Artifacts
   async getArtifacts(userId: string): Promise<Artifact[]> {
     return await db.select().from(artifacts).where(eq(artifacts.userId, userId));
   }
 
   async getArtifactsByComponent(userId: string, componentId: string): Promise<Artifact[]> {
-    return await db.select().from(artifacts)
-      .where(and(eq(artifacts.userId, userId), eq(artifacts.componentId, componentId)));
+    return await db.select().from(artifacts).where(and(eq(artifacts.userId, userId), eq(artifacts.componentId, componentId)));
   }
 
   async upsertArtifact(artifact: InsertArtifact): Promise<Artifact> {
     const [existing] = await db.select().from(artifacts)
-      .where(and(
-        eq(artifacts.userId, artifact.userId),
-        eq(artifacts.componentId, artifact.componentId),
-        eq(artifacts.artifactType, artifact.artifactType)
-      ));
+      .where(and(eq(artifacts.userId, artifact.userId), eq(artifacts.componentId, artifact.componentId), eq(artifacts.artifactType, artifact.artifactType)));
     
     if (existing) {
       const [updated] = await db.update(artifacts)
-        .set({
-          title: artifact.title ?? existing.title,
-          content: artifact.content ?? existing.content,
-          updatedAt: new Date(),
-        })
-        .where(eq(artifacts.id, existing.id))
-        .returning();
+        .set({ title: artifact.title ?? existing.title, content: artifact.content ?? existing.content, updatedAt: new Date() })
+        .where(eq(artifacts.id, existing.id)).returning();
       return updated;
     }
     
-    const [created] = await db.insert(artifacts)
-      .values({
-        userId: artifact.userId,
-        componentId: artifact.componentId,
-        artifactType: artifact.artifactType,
-        title: artifact.title,
-        content: artifact.content ?? "",
-      })
-      .returning();
+    const [created] = await db.insert(artifacts).values({
+      userId: artifact.userId, componentId: artifact.componentId, artifactType: artifact.artifactType,
+      title: artifact.title, content: artifact.content ?? "",
+    }).returning();
     return created;
   }
 
   async deleteArtifact(id: string, userId: string): Promise<void> {
-    await db.delete(artifacts)
-      .where(and(eq(artifacts.id, id), eq(artifacts.userId, userId)));
+    await db.delete(artifacts).where(and(eq(artifacts.id, id), eq(artifacts.userId, userId)));
+  }
+
+  // Clients
+  async getClients(userId: string): Promise<Client[]> {
+    return await db.select().from(clients).where(eq(clients.userId, userId)).orderBy(desc(clients.createdAt));
+  }
+
+  async getClient(id: string, userId: string): Promise<Client | undefined> {
+    const [client] = await db.select().from(clients).where(and(eq(clients.id, id), eq(clients.userId, userId)));
+    return client;
+  }
+
+  async createClient(client: InsertClient): Promise<Client> {
+    const [created] = await db.insert(clients).values(client).returning();
+    return created;
+  }
+
+  async updateClient(id: string, userId: string, data: Partial<InsertClient>): Promise<Client> {
+    const [updated] = await db.update(clients).set({ ...data, updatedAt: new Date() })
+      .where(and(eq(clients.id, id), eq(clients.userId, userId))).returning();
+    return updated;
+  }
+
+  async deleteClient(id: string, userId: string): Promise<void> {
+    await db.delete(clients).where(and(eq(clients.id, id), eq(clients.userId, userId)));
+  }
+
+  // Time Entries
+  async getTimeEntries(userId: string): Promise<TimeEntry[]> {
+    return await db.select().from(timeEntries).where(eq(timeEntries.userId, userId)).orderBy(desc(timeEntries.startTime));
+  }
+
+  async getTimeEntriesByClient(userId: string, clientId: string): Promise<TimeEntry[]> {
+    return await db.select().from(timeEntries).where(and(eq(timeEntries.userId, userId), eq(timeEntries.clientId, clientId)));
+  }
+
+  async createTimeEntry(entry: InsertTimeEntry): Promise<TimeEntry> {
+    const [created] = await db.insert(timeEntries).values(entry).returning();
+    return created;
+  }
+
+  async updateTimeEntry(id: string, userId: string, data: Partial<InsertTimeEntry>): Promise<TimeEntry> {
+    const [updated] = await db.update(timeEntries).set({ ...data, updatedAt: new Date() })
+      .where(and(eq(timeEntries.id, id), eq(timeEntries.userId, userId))).returning();
+    return updated;
+  }
+
+  async deleteTimeEntry(id: string, userId: string): Promise<void> {
+    await db.delete(timeEntries).where(and(eq(timeEntries.id, id), eq(timeEntries.userId, userId)));
+  }
+
+  // Actions
+  async getActions(userId: string): Promise<Action[]> {
+    return await db.select().from(actions).where(eq(actions.userId, userId)).orderBy(actions.dueDate);
+  }
+
+  async createAction(action: InsertAction): Promise<Action> {
+    const [created] = await db.insert(actions).values(action).returning();
+    return created;
+  }
+
+  async updateAction(id: string, userId: string, data: Partial<InsertAction>): Promise<Action> {
+    const [updated] = await db.update(actions).set({ ...data, updatedAt: new Date() })
+      .where(and(eq(actions.id, id), eq(actions.userId, userId))).returning();
+    return updated;
+  }
+
+  async deleteAction(id: string, userId: string): Promise<void> {
+    await db.delete(actions).where(and(eq(actions.id, id), eq(actions.userId, userId)));
+  }
+
+  // Invoices
+  async getInvoices(userId: string): Promise<Invoice[]> {
+    return await db.select().from(invoices).where(eq(invoices.userId, userId)).orderBy(desc(invoices.createdAt));
+  }
+
+  async getInvoice(id: string, userId: string): Promise<Invoice | undefined> {
+    const [invoice] = await db.select().from(invoices).where(and(eq(invoices.id, id), eq(invoices.userId, userId)));
+    return invoice;
+  }
+
+  async createInvoice(invoice: InsertInvoice): Promise<Invoice> {
+    const [created] = await db.insert(invoices).values(invoice).returning();
+    return created;
+  }
+
+  async updateInvoice(id: string, userId: string, data: Partial<InsertInvoice>): Promise<Invoice> {
+    const [updated] = await db.update(invoices).set({ ...data, updatedAt: new Date() })
+      .where(and(eq(invoices.id, id), eq(invoices.userId, userId))).returning();
+    return updated;
+  }
+
+  async getInvoiceItems(invoiceId: string): Promise<InvoiceItem[]> {
+    return await db.select().from(invoiceItems).where(eq(invoiceItems.invoiceId, invoiceId));
+  }
+
+  async createInvoiceItem(item: InsertInvoiceItem): Promise<InvoiceItem> {
+    const [created] = await db.insert(invoiceItems).values(item).returning();
+    return created;
+  }
+
+  // Debrief Templates
+  async getDebriefTemplates(userId: string): Promise<DebriefTemplate[]> {
+    return await db.select().from(debriefTemplates).where(eq(debriefTemplates.userId, userId));
+  }
+
+  async createDebriefTemplate(template: InsertDebriefTemplate): Promise<DebriefTemplate> {
+    const [created] = await db.insert(debriefTemplates).values(template).returning();
+    return created;
+  }
+
+  async updateDebriefTemplate(id: string, userId: string, data: Partial<InsertDebriefTemplate>): Promise<DebriefTemplate> {
+    const [updated] = await db.update(debriefTemplates).set({ ...data, updatedAt: new Date() })
+      .where(and(eq(debriefTemplates.id, id), eq(debriefTemplates.userId, userId))).returning();
+    return updated;
+  }
+
+  async deleteDebriefTemplate(id: string, userId: string): Promise<void> {
+    await db.delete(debriefTemplates).where(and(eq(debriefTemplates.id, id), eq(debriefTemplates.userId, userId)));
+  }
+
+  // Debrief Records
+  async getDebriefRecords(userId: string): Promise<DebriefRecord[]> {
+    return await db.select().from(debriefRecords).where(eq(debriefRecords.userId, userId)).orderBy(desc(debriefRecords.createdAt));
+  }
+
+  async createDebriefRecord(record: InsertDebriefRecord): Promise<DebriefRecord> {
+    const [created] = await db.insert(debriefRecords).values(record).returning();
+    return created;
+  }
+
+  async updateDebriefRecord(id: string, userId: string, data: Partial<InsertDebriefRecord>): Promise<DebriefRecord> {
+    const [updated] = await db.update(debriefRecords).set({ ...data, updatedAt: new Date() })
+      .where(and(eq(debriefRecords.id, id), eq(debriefRecords.userId, userId))).returning();
+    return updated;
+  }
+
+  // Messages
+  async getMessages(userId: string): Promise<Message[]> {
+    return await db.select().from(messages).where(eq(messages.userId, userId)).orderBy(desc(messages.createdAt));
+  }
+
+  async getMessagesByClient(userId: string, clientId: string): Promise<Message[]> {
+    return await db.select().from(messages).where(and(eq(messages.userId, userId), eq(messages.clientId, clientId))).orderBy(messages.createdAt);
+  }
+
+  async createMessage(message: InsertMessage): Promise<Message> {
+    const [created] = await db.insert(messages).values(message).returning();
+    return created;
+  }
+
+  async markMessageRead(id: string, userId: string): Promise<void> {
+    await db.update(messages).set({ readAt: new Date() }).where(and(eq(messages.id, id), eq(messages.userId, userId)));
   }
 }
 

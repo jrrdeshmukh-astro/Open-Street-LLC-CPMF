@@ -5,6 +5,8 @@ interface User {
   email: string;
   firstName: string | null;
   lastName: string | null;
+  role: string | null;
+  organization: string | null;
 }
 
 async function fetchUser(): Promise<User | null> {
@@ -47,6 +49,7 @@ export function useAuth() {
     user,
     isLoading,
     isAuthenticated: !!user,
+    isAdmin: user?.role === "admin",
     logout: logoutMutation.mutate,
     isLoggingOut: logoutMutation.isPending,
   };

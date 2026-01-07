@@ -3,6 +3,20 @@ import { index, jsonb, pgTable, timestamp, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+export const USER_ROLES = [
+  "admin",
+  "government_compliance_officer", 
+  "industry_partner",
+  "academia"
+] as const;
+
+export const SELF_REGISTRATION_ROLES = [
+  "industry_partner",
+  "academia"
+] as const;
+
+export type UserRole = typeof USER_ROLES[number];
+
 export const sessions = pgTable(
   "sessions",
   {
@@ -19,6 +33,8 @@ export const users = pgTable("users", {
   passwordHash: varchar("password_hash").notNull(),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
+  role: varchar("role").default("industry_partner"),
+  organization: varchar("organization"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -35,6 +51,8 @@ export const registerSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters"),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
+  role: z.enum(SELF_REGISTRATION_ROLES).default("industry_partner"),
+  organization: z.string().optional(),
 });
 
 export const loginSchema = z.object({

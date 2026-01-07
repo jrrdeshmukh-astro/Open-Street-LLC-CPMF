@@ -1370,5 +1370,252 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // Billing Rates CRUD
+  app.get("/api/billing-rates", requireAuth, async (req: any, res) => {
+    try {
+      const rates = await storage.getBillingRates(req.session.userId);
+      res.json(rates);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch billing rates" });
+    }
+  });
+
+  app.post("/api/billing-rates", requireAuth, async (req: any, res) => {
+    try {
+      const rate = await storage.createBillingRate({ ...req.body, userId: req.session.userId });
+      res.json(rate);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create billing rate" });
+    }
+  });
+
+  app.put("/api/billing-rates/:id", requireAuth, async (req: any, res) => {
+    try {
+      const rate = await storage.updateBillingRate(req.params.id, req.session.userId, req.body);
+      res.json(rate);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update billing rate" });
+    }
+  });
+
+  app.delete("/api/billing-rates/:id", requireAuth, async (req: any, res) => {
+    try {
+      await storage.deleteBillingRate(req.params.id, req.session.userId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete billing rate" });
+    }
+  });
+
+  // Task Codes CRUD
+  app.get("/api/task-codes", requireAuth, async (req: any, res) => {
+    try {
+      const codes = await storage.getTaskCodes(req.session.userId, req.query.clientId);
+      res.json(codes);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch task codes" });
+    }
+  });
+
+  app.post("/api/task-codes", requireAuth, async (req: any, res) => {
+    try {
+      const code = await storage.createTaskCode({ ...req.body, userId: req.session.userId });
+      res.json(code);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create task code" });
+    }
+  });
+
+  app.put("/api/task-codes/:id", requireAuth, async (req: any, res) => {
+    try {
+      const code = await storage.updateTaskCode(req.params.id, req.session.userId, req.body);
+      res.json(code);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update task code" });
+    }
+  });
+
+  app.delete("/api/task-codes/:id", requireAuth, async (req: any, res) => {
+    try {
+      await storage.deleteTaskCode(req.params.id, req.session.userId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete task code" });
+    }
+  });
+
+  // Contract Templates CRUD
+  app.get("/api/contract-templates", requireAuth, async (req: any, res) => {
+    try {
+      const templates = await storage.getContractTemplates(req.session.userId);
+      res.json(templates);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch contract templates" });
+    }
+  });
+
+  app.get("/api/contract-templates/:id", requireAuth, async (req: any, res) => {
+    try {
+      const template = await storage.getContractTemplate(req.params.id);
+      res.json(template);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch contract template" });
+    }
+  });
+
+  app.post("/api/contract-templates", requireAuth, async (req: any, res) => {
+    try {
+      const template = await storage.createContractTemplate({ ...req.body, userId: req.session.userId });
+      res.json(template);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create contract template" });
+    }
+  });
+
+  app.put("/api/contract-templates/:id", requireAuth, async (req: any, res) => {
+    try {
+      const template = await storage.updateContractTemplate(req.params.id, req.session.userId, req.body);
+      res.json(template);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update contract template" });
+    }
+  });
+
+  app.delete("/api/contract-templates/:id", requireAuth, async (req: any, res) => {
+    try {
+      await storage.deleteContractTemplate(req.params.id, req.session.userId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete contract template" });
+    }
+  });
+
+  // Contracts CRUD
+  app.get("/api/contracts", requireAuth, async (req: any, res) => {
+    try {
+      const contracts = await storage.getContracts(req.session.userId, req.query.clientId);
+      res.json(contracts);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch contracts" });
+    }
+  });
+
+  app.get("/api/contracts/:id", requireAuth, async (req: any, res) => {
+    try {
+      const contract = await storage.getContract(req.params.id, req.session.userId);
+      res.json(contract);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch contract" });
+    }
+  });
+
+  app.post("/api/contracts", requireAuth, async (req: any, res) => {
+    try {
+      const contractNumber = await storage.generateContractNumber(req.session.userId);
+      const contract = await storage.createContract({ ...req.body, userId: req.session.userId, contractNumber });
+      res.json(contract);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create contract" });
+    }
+  });
+
+  app.post("/api/contracts/from-template/:templateId", requireAuth, async (req: any, res) => {
+    try {
+      const template = await storage.getContractTemplate(req.params.templateId);
+      if (!template) return res.status(404).json({ message: "Template not found" });
+      
+      const { clientId, variableValues, title } = req.body;
+      let content = template.content;
+      
+      // Replace placeholders with values
+      if (variableValues) {
+        for (const [key, value] of Object.entries(variableValues)) {
+          content = content.replace(new RegExp(`{{${key}}}`, 'g'), value as string);
+        }
+      }
+      
+      const contractNumber = await storage.generateContractNumber(req.session.userId);
+      const contract = await storage.createContract({
+        userId: req.session.userId,
+        clientId,
+        templateId: template.id,
+        contractNumber,
+        title: title || template.name,
+        contractType: template.templateType,
+        content,
+        variableValues: JSON.stringify(variableValues || {}),
+        status: "draft"
+      });
+      res.json(contract);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create contract from template" });
+    }
+  });
+
+  app.put("/api/contracts/:id", requireAuth, async (req: any, res) => {
+    try {
+      const contract = await storage.updateContract(req.params.id, req.session.userId, req.body);
+      res.json(contract);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update contract" });
+    }
+  });
+
+  app.delete("/api/contracts/:id", requireAuth, async (req: any, res) => {
+    try {
+      await storage.deleteContract(req.params.id, req.session.userId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete contract" });
+    }
+  });
+
+  // Legal Settings
+  app.get("/api/legal/settings", requireAuth, async (req: any, res) => {
+    try {
+      const settings = await storage.getLegalSettings(req.session.userId);
+      if (settings) {
+        const { docusignAccessToken, docusignRefreshToken, pandadocApiKey, ...safeSettings } = settings;
+        res.json({ 
+          ...safeSettings, 
+          hasDocusignToken: !!docusignAccessToken,
+          hasPandadocKey: !!pandadocApiKey
+        });
+      } else {
+        res.json(null);
+      }
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch legal settings" });
+    }
+  });
+
+  app.put("/api/legal/settings", requireAuth, async (req: any, res) => {
+    try {
+      const settings = await storage.upsertLegalSettings({ ...req.body, userId: req.session.userId });
+      const { docusignAccessToken, docusignRefreshToken, pandadocApiKey, ...safeSettings } = settings;
+      res.json({ 
+        ...safeSettings, 
+        hasDocusignToken: !!docusignAccessToken,
+        hasPandadocKey: !!pandadocApiKey
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to save legal settings" });
+    }
+  });
+
+  // Auto-generate invoice from time entries
+  app.post("/api/invoices/generate", requireAuth, async (req: any, res) => {
+    try {
+      const { clientId, timeEntryIds } = req.body;
+      if (!clientId) {
+        return res.status(400).json({ message: "Client ID is required" });
+      }
+      const invoice = await storage.generateInvoiceFromTimeEntries(req.session.userId, clientId, timeEntryIds || []);
+      res.json(invoice);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to generate invoice" });
+    }
+  });
+
   return httpServer;
 }

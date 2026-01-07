@@ -21,7 +21,7 @@ import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import ReactMarkdown from "react-markdown";
-import type { WorkflowProgress, Artifact, Client, TimeEntry, Action, Invoice, DebriefTemplate, Message, Guide, FormTemplate, FormSubmission, Collaboration } from "@shared/schema";
+import type { WorkflowProgress, Artifact, Client, TimeEntry, Action, Invoice, DebriefTemplate, Message, Guide, FormTemplate, FormSubmission, Collaboration, BillingRate, TaskCode, Contract, ContractTemplate } from "@shared/schema";
 
 const FRAMEWORK_COMPONENTS = [
   { id: "engagement_structure", name: "Engagement Structure", icon: Users, description: "Program charter, stakeholder roles, and meeting cadence", artifacts: ["program_charter", "stakeholder_map", "meeting_schedule"] },
@@ -59,6 +59,22 @@ const SET_ASIDE_OPTIONS = [
   { value: "8a", label: "8(a)" }
 ];
 
+const CONTRACT_TYPES = [
+  { value: "nda", label: "Non-Disclosure Agreement (NDA)" },
+  { value: "msa", label: "Master Service Agreement (MSA)" },
+  { value: "sow", label: "Statement of Work (SOW)" },
+  { value: "teaming_agreement", label: "Teaming Agreement" },
+  { value: "subcontract", label: "Subcontract" },
+  { value: "consulting", label: "Consulting Agreement" }
+];
+
+const TASK_CATEGORIES = [
+  { value: "business_development", label: "Business Development" },
+  { value: "delivery", label: "Project Delivery" },
+  { value: "admin", label: "Administrative" },
+  { value: "training", label: "Training" }
+];
+
 export default function Dashboard() {
   const { user, isLoading: authLoading, logout } = useAuth();
   const { toast } = useToast();
@@ -89,6 +105,10 @@ export default function Dashboard() {
   const { data: formSubmissions = [] } = useQuery<FormSubmission[]>({ queryKey: ["/api/form-submissions"], enabled: !!user });
   const { data: collaborations = [] } = useQuery<Collaboration[]>({ queryKey: ["/api/collaborations"], enabled: !!user });
   const { data: pendingInvites = [] } = useQuery<Collaboration[]>({ queryKey: ["/api/collaborations/pending"], enabled: !!user });
+  const { data: billingRates = [] } = useQuery<BillingRate[]>({ queryKey: ["/api/billing-rates"], enabled: !!user });
+  const { data: taskCodes = [] } = useQuery<TaskCode[]>({ queryKey: ["/api/task-codes"], enabled: !!user });
+  const { data: contracts = [] } = useQuery<Contract[]>({ queryKey: ["/api/contracts"], enabled: !!user });
+  const { data: contractTemplates = [] } = useQuery<ContractTemplate[]>({ queryKey: ["/api/contract-templates"], enabled: !!user });
   const [selectedGuide, setSelectedGuide] = useState<Guide | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
   const [selectedClientForCollab, setSelectedClientForCollab] = useState<string | null>(null);
@@ -122,6 +142,17 @@ export default function Dashboard() {
   const [asanaWorkspaceId, setAsanaWorkspaceId] = useState("");
   const [asanaProjectId, setAsanaProjectId] = useState("");
   const [stageFilter, setStageFilter] = useState<string>("all");
+
+  // Enhanced time tracking and billing state
+  const [billingRateDialogOpen, setBillingRateDialogOpen] = useState(false);
+  const [taskCodeDialogOpen, setTaskCodeDialogOpen] = useState(false);
+  const [contractDialogOpen, setContractDialogOpen] = useState(false);
+  const [contractTemplateDialogOpen, setContractTemplateDialogOpen] = useState(false);
+  const [generateInvoiceDialogOpen, setGenerateInvoiceDialogOpen] = useState(false);
+  const [selectedClientForTimer, setSelectedClientForTimer] = useState<string | null>(null);
+  const [selectedBillingRateForTimer, setSelectedBillingRateForTimer] = useState<string | null>(null);
+  const [selectedClientForInvoice, setSelectedClientForInvoice] = useState<string | null>(null);
+  const [selectedTemplateForContract, setSelectedTemplateForContract] = useState<string | null>(null);
 
   // Jira queries
   const { data: jiraSettings } = useQuery<any>({ queryKey: ["/api/jira/settings"], enabled: !!user });
@@ -437,6 +468,73 @@ export default function Dashboard() {
     }
   });
 
+  // Enhanced billing and time tracking mutations
+  const createBillingRateMutation = useMutation({
+    mutationFn: async (data: { name: string; rate: string; laborCategory?: string; rateType?: string }) => {
+      const res = await fetch("/api/billing-rates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data), credentials: "include" });
+      if (!res.ok) throw new Error("Failed to create billing rate");
+      return res.json();
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/billing-rates"] }); toast({ title: "Billing rate created" }); setBillingRateDialogOpen(false); },
+    onError: () => toast({ title: "Failed to create billing rate", variant: "destructive" }),
+  });
+
+  const createTaskCodeMutation = useMutation({
+    mutationFn: async (data: { code: string; name: string; category?: string; isBillable?: boolean }) => {
+      const res = await fetch("/api/task-codes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data), credentials: "include" });
+      if (!res.ok) throw new Error("Failed to create task code");
+      return res.json();
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/task-codes"] }); toast({ title: "Task code created" }); setTaskCodeDialogOpen(false); },
+    onError: () => toast({ title: "Failed to create task code", variant: "destructive" }),
+  });
+
+  const createContractMutation = useMutation({
+    mutationFn: async (data: { clientId: string; contractType: string; title: string; content?: string; status?: string }) => {
+      const res = await fetch("/api/contracts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data), credentials: "include" });
+      if (!res.ok) throw new Error("Failed to create contract");
+      return res.json();
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/contracts"] }); toast({ title: "Contract created" }); setContractDialogOpen(false); },
+    onError: () => toast({ title: "Failed to create contract", variant: "destructive" }),
+  });
+
+  const createContractFromTemplateMutation = useMutation({
+    mutationFn: async ({ templateId, clientId, variables }: { templateId: string; clientId: string; variables?: Record<string, string> }) => {
+      const res = await fetch(`/api/contracts/from-template/${templateId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clientId, variables }), credentials: "include" });
+      if (!res.ok) throw new Error("Failed to create contract from template");
+      return res.json();
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/contracts"] }); toast({ title: "Contract created from template" }); setContractDialogOpen(false); },
+    onError: () => toast({ title: "Failed to create contract from template", variant: "destructive" }),
+  });
+
+  const createContractTemplateMutation = useMutation({
+    mutationFn: async (data: { name: string; templateType: string; content: string; description?: string; variables?: string }) => {
+      const res = await fetch("/api/contract-templates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data), credentials: "include" });
+      if (!res.ok) throw new Error("Failed to create contract template");
+      return res.json();
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/contract-templates"] }); toast({ title: "Contract template created" }); setContractTemplateDialogOpen(false); },
+    onError: () => toast({ title: "Failed to create contract template", variant: "destructive" }),
+  });
+
+  const generateInvoiceMutation = useMutation({
+    mutationFn: async (data: { clientId: string }) => {
+      const res = await fetch("/api/invoices/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data), credentials: "include" });
+      if (!res.ok) throw new Error("Failed to generate invoice");
+      return res.json();
+    },
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ["/api/invoices"] }); 
+      queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] }); 
+      toast({ title: "Invoice generated" }); 
+      setGenerateInvoiceDialogOpen(false);
+      setSelectedClientForInvoice(null);
+    },
+    onError: () => toast({ title: "Failed to generate invoice", variant: "destructive" }),
+  });
+
   const handleStartForm = (template: FormTemplate) => {
     setSelectedFormTemplate(template);
     setFormData({});
@@ -545,9 +643,18 @@ export default function Dashboard() {
   const handleStopTimer = () => {
     if (timerStart) {
       const durationMinutes = Math.round((new Date().getTime() - timerStart.getTime()) / 60000);
-      timeEntryMutation.mutate({ description: timerDescription || "Timer entry", startTime: timerStart, endTime: new Date(), durationMinutes });
+      const selectedRate = billingRates.find(r => r.id === selectedBillingRateForTimer);
+      timeEntryMutation.mutate({ 
+        description: timerDescription || "Timer entry", 
+        startTime: timerStart, 
+        endTime: new Date(), 
+        durationMinutes,
+        clientId: selectedClientForTimer || undefined,
+        hourlyRate: selectedRate?.rate || undefined,
+        billingRateId: selectedBillingRateForTimer || undefined,
+      });
     }
-    setTimerRunning(false); setTimerStart(null); setTimerDescription("");
+    setTimerRunning(false); setTimerStart(null); setTimerDescription(""); setSelectedClientForTimer(null); setSelectedBillingRateForTimer(null);
   };
 
   const totalHours = timeEntries.reduce((acc, e) => acc + (e.durationMinutes || 0), 0) / 60;
@@ -1105,9 +1212,29 @@ export default function Dashboard() {
                       <Dialog>
                         <DialogTrigger asChild><Button data-testid="button-start-timer"><Play className="w-4 h-4 mr-2" />Start Timer</Button></DialogTrigger>
                         <DialogContent>
-                          <DialogHeader><DialogTitle>Start Timer</DialogTitle></DialogHeader>
+                          <DialogHeader><DialogTitle>Start Timer</DialogTitle><DialogDescription>Track time with client and billing rate</DialogDescription></DialogHeader>
                           <div className="space-y-4">
                             <div className="space-y-2"><Label>Description</Label><Input value={timerDescription} onChange={(e) => setTimerDescription(e.target.value)} placeholder="What are you working on?" data-testid="input-timer-description" /></div>
+                            <div className="space-y-2">
+                              <Label>Client (optional)</Label>
+                              <Select value={selectedClientForTimer || ""} onValueChange={setSelectedClientForTimer}>
+                                <SelectTrigger data-testid="select-timer-client"><SelectValue placeholder="Select client" /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="">No client</SelectItem>
+                                  {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Billing Rate (optional)</Label>
+                              <Select value={selectedBillingRateForTimer || ""} onValueChange={setSelectedBillingRateForTimer}>
+                                <SelectTrigger data-testid="select-timer-billing-rate"><SelectValue placeholder="Select billing rate" /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="">No billing rate</SelectItem>
+                                  {billingRates.map(r => <SelectItem key={r.id} value={r.id}>{r.name} - ${Number(r.rate).toFixed(2)}/hr</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            </div>
                             <Button onClick={() => { handleStartTimer(); }} className="w-full" data-testid="button-confirm-timer"><Play className="w-4 h-4 mr-2" />Start</Button>
                           </div>
                         </DialogContent>
@@ -1118,30 +1245,141 @@ export default function Dashboard() {
                 <CardContent>
                   {timerRunning && timerStart && (
                     <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between">
-                      <div><span className="font-medium text-green-700">Timer Running</span><p className="text-sm text-green-600">{timerDescription || "No description"}</p></div>
+                      <div>
+                        <span className="font-medium text-green-700">Timer Running</span>
+                        <p className="text-sm text-green-600">{timerDescription || "No description"}</p>
+                        {selectedClientForTimer && <p className="text-xs text-green-500">Client: {clients.find(c => c.id === selectedClientForTimer)?.name}</p>}
+                        {selectedBillingRateForTimer && <p className="text-xs text-green-500">Rate: {billingRates.find(r => r.id === selectedBillingRateForTimer)?.name}</p>}
+                      </div>
                       <span className="font-mono text-2xl text-green-700">{Math.floor((new Date().getTime() - timerStart.getTime()) / 60000)}m</span>
                     </div>
                   )}
                   <ScrollArea className="h-[350px]">
                     <div className="space-y-3">
-                      {timeEntries.length === 0 ? <p className="text-center text-muted-foreground py-8">No time entries yet. Start tracking your time.</p> : timeEntries.map((entry) => (
-                        <div key={entry.id} className="p-4 rounded-lg border border-slate-200" data-testid={`time-entry-${entry.id}`}>
-                          <div className="flex items-center justify-between mb-2"><span className="font-medium">{entry.description}</span><Badge variant={entry.billable ? "default" : "secondary"}>{entry.billable ? "Billable" : "Non-billable"}</Badge></div>
-                          <div className="flex items-center justify-between text-sm text-muted-foreground"><span>{new Date(entry.startTime).toLocaleDateString()}</span><span className="font-mono">{entry.durationMinutes ? `${Math.floor(entry.durationMinutes / 60)}h ${entry.durationMinutes % 60}m` : "In progress"}</span></div>
-                        </div>
-                      ))}
+                      {timeEntries.length === 0 ? <p className="text-center text-muted-foreground py-8">No time entries yet. Start tracking your time.</p> : timeEntries.map((entry) => {
+                        const entryClient = clients.find(c => c.id === entry.clientId);
+                        return (
+                          <div key={entry.id} className="p-4 rounded-lg border border-slate-200" data-testid={`time-entry-${entry.id}`}>
+                            <div className="flex items-center justify-between mb-2"><span className="font-medium">{entry.description}</span><Badge variant={entry.billable ? "default" : "secondary"}>{entry.billable ? "Billable" : "Non-billable"}</Badge></div>
+                            <div className="flex items-center justify-between text-sm text-muted-foreground mb-1">
+                              <span>{new Date(entry.startTime).toLocaleDateString()}</span>
+                              <span className="font-mono">{entry.durationMinutes ? `${Math.floor(entry.durationMinutes / 60)}h ${entry.durationMinutes % 60}m` : "In progress"}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              {entryClient && <span className="bg-slate-100 px-2 py-0.5 rounded" data-testid={`time-entry-client-${entry.id}`}><Building2 className="w-3 h-3 inline mr-1" />{entryClient.name}</span>}
+                              {entry.hourlyRate && <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded" data-testid={`time-entry-rate-${entry.id}`}><DollarSign className="w-3 h-3 inline" />{Number(entry.hourlyRate).toFixed(2)}/hr</span>}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </ScrollArea>
                 </CardContent>
               </Card>
-              <Card>
-                <CardHeader><CardTitle className="font-serif">Summary</CardTitle></CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"><span>Total Hours</span><span className="font-bold text-xl">{totalHours.toFixed(1)}</span></div>
-                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"><span>Billable</span><span className="font-bold text-xl text-green-600">{(timeEntries.filter(e => e.billable).reduce((a, e) => a + (e.durationMinutes || 0), 0) / 60).toFixed(1)}</span></div>
-                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"><span>This Week</span><span className="font-bold text-xl">{timeEntries.filter(e => new Date(e.startTime) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).reduce((a, e) => a + (e.durationMinutes || 0), 0) / 60}h</span></div>
-                </CardContent>
-              </Card>
+              
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader><CardTitle className="font-serif">Summary</CardTitle></CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"><span>Total Hours</span><span className="font-bold text-xl">{totalHours.toFixed(1)}</span></div>
+                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"><span>Billable</span><span className="font-bold text-xl text-green-600">{(timeEntries.filter(e => e.billable).reduce((a, e) => a + (e.durationMinutes || 0), 0) / 60).toFixed(1)}</span></div>
+                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"><span>This Week</span><span className="font-bold text-xl">{timeEntries.filter(e => new Date(e.startTime) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)).reduce((a, e) => a + (e.durationMinutes || 0), 0) / 60}h</span></div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="font-serif text-base">Billing Rates</CardTitle>
+                    <Dialog open={billingRateDialogOpen} onOpenChange={setBillingRateDialogOpen}>
+                      <DialogTrigger asChild><Button size="sm" variant="outline" data-testid="button-add-billing-rate"><Plus className="w-4 h-4 mr-1" />Add</Button></DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader><DialogTitle>Create Billing Rate</DialogTitle><DialogDescription>Define a reusable billing rate for time tracking</DialogDescription></DialogHeader>
+                        <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); createBillingRateMutation.mutate({ name: fd.get("name") as string, rate: fd.get("rate") as string, laborCategory: fd.get("laborCategory") as string, rateType: fd.get("rateType") as string }); }} className="space-y-4">
+                          <div className="space-y-2"><Label>Name</Label><Input name="name" placeholder="e.g., Senior Consultant" required data-testid="input-billing-rate-name" /></div>
+                          <div className="space-y-2"><Label>Hourly Rate ($)</Label><Input name="rate" type="number" step="0.01" placeholder="150.00" required data-testid="input-billing-rate-amount" /></div>
+                          <div className="space-y-2"><Label>Labor Category</Label><Input name="laborCategory" placeholder="e.g., Professional Services" data-testid="input-billing-rate-category" /></div>
+                          <div className="space-y-2">
+                            <Label>Rate Type</Label>
+                            <Select name="rateType" defaultValue="hourly">
+                              <SelectTrigger data-testid="select-billing-rate-type"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="hourly">Hourly</SelectItem>
+                                <SelectItem value="daily">Daily</SelectItem>
+                                <SelectItem value="fixed">Fixed</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <Button type="submit" className="w-full" disabled={createBillingRateMutation.isPending} data-testid="button-submit-billing-rate">{createBillingRateMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}Create Rate</Button>
+                        </form>
+                      </DialogContent>
+                    </Dialog>
+                  </CardHeader>
+                  <CardContent>
+                    <ScrollArea className="h-[120px]">
+                      {billingRates.length === 0 ? <p className="text-sm text-muted-foreground text-center py-4">No billing rates defined</p> : (
+                        <div className="space-y-2">
+                          {billingRates.map(rate => (
+                            <div key={rate.id} className="p-2 bg-slate-50 rounded flex items-center justify-between" data-testid={`billing-rate-${rate.id}`}>
+                              <div>
+                                <p className="text-sm font-medium">{rate.name}</p>
+                                {rate.laborCategory && <p className="text-xs text-muted-foreground">{rate.laborCategory}</p>}
+                              </div>
+                              <Badge variant="secondary">${Number(rate.rate).toFixed(2)}/{rate.rateType === "daily" ? "day" : "hr"}</Badge>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="font-serif text-base">Task Codes</CardTitle>
+                    <Dialog open={taskCodeDialogOpen} onOpenChange={setTaskCodeDialogOpen}>
+                      <DialogTrigger asChild><Button size="sm" variant="outline" data-testid="button-add-task-code"><Plus className="w-4 h-4 mr-1" />Add</Button></DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader><DialogTitle>Create Task Code</DialogTitle><DialogDescription>Define task codes for categorizing time entries</DialogDescription></DialogHeader>
+                        <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); createTaskCodeMutation.mutate({ code: fd.get("code") as string, name: fd.get("name") as string, category: fd.get("category") as string, isBillable: fd.get("isBillable") === "on" }); }} className="space-y-4">
+                          <div className="space-y-2"><Label>Code</Label><Input name="code" placeholder="e.g., BD-001" required data-testid="input-task-code" /></div>
+                          <div className="space-y-2"><Label>Name</Label><Input name="name" placeholder="e.g., Proposal Writing" required data-testid="input-task-code-name" /></div>
+                          <div className="space-y-2">
+                            <Label>Category</Label>
+                            <Select name="category" defaultValue="delivery">
+                              <SelectTrigger data-testid="select-task-code-category"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                {TASK_CATEGORIES.map(cat => <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Checkbox id="isBillable" name="isBillable" defaultChecked data-testid="checkbox-task-billable" />
+                            <Label htmlFor="isBillable" className="cursor-pointer">Billable</Label>
+                          </div>
+                          <Button type="submit" className="w-full" disabled={createTaskCodeMutation.isPending} data-testid="button-submit-task-code">{createTaskCodeMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}Create Task Code</Button>
+                        </form>
+                      </DialogContent>
+                    </Dialog>
+                  </CardHeader>
+                  <CardContent>
+                    <ScrollArea className="h-[120px]">
+                      {taskCodes.length === 0 ? <p className="text-sm text-muted-foreground text-center py-4">No task codes defined</p> : (
+                        <div className="space-y-2">
+                          {taskCodes.map(tc => (
+                            <div key={tc.id} className="p-2 bg-slate-50 rounded flex items-center justify-between" data-testid={`task-code-${tc.id}`}>
+                              <div>
+                                <p className="text-sm font-medium">{tc.code}</p>
+                                <p className="text-xs text-muted-foreground">{tc.name}</p>
+                              </div>
+                              <Badge variant={tc.isBillable ? "default" : "secondary"}>{tc.isBillable ? "Billable" : "Non-billable"}</Badge>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           </TabsContent>
 
@@ -1318,28 +1556,180 @@ export default function Dashboard() {
           <TabsContent value="billing">
             <div className="grid lg:grid-cols-3 gap-6">
               <Card className="lg:col-span-2">
-                <CardHeader><CardTitle className="font-serif">Invoices</CardTitle></CardHeader>
-                <CardContent>
-                  <ScrollArea className="h-[400px]">
-                    <div className="space-y-3">
-                      {invoices.length === 0 ? <p className="text-center text-muted-foreground py-8">No invoices yet. Create your first invoice.</p> : invoices.map((invoice) => (
-                        <div key={invoice.id} className="p-4 rounded-lg border border-slate-200" data-testid={`invoice-card-${invoice.id}`}>
-                          <div className="flex items-center justify-between mb-2"><span className="font-medium">{invoice.invoiceNumber}</span><Badge variant={invoice.status === "paid" ? "default" : invoice.status === "overdue" ? "destructive" : "secondary"}>{invoice.status}</Badge></div>
-                          <div className="flex items-center justify-between text-sm text-muted-foreground"><span>Issued: {invoice.issueDate ? new Date(invoice.issueDate).toLocaleDateString() : "N/A"}</span><span className="font-bold text-lg">${Number(invoice.total || 0).toFixed(2)}</span></div>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="font-serif">Invoices</CardTitle>
+                  <Dialog open={generateInvoiceDialogOpen} onOpenChange={setGenerateInvoiceDialogOpen}>
+                    <DialogTrigger asChild><Button data-testid="button-generate-invoice"><DollarSign className="w-4 h-4 mr-2" />Generate Invoice</Button></DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader><DialogTitle>Generate Invoice</DialogTitle><DialogDescription>Create an invoice from unbilled time entries for a client</DialogDescription></DialogHeader>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label>Select Client</Label>
+                          <Select value={selectedClientForInvoice || ""} onValueChange={setSelectedClientForInvoice}>
+                            <SelectTrigger data-testid="select-invoice-client"><SelectValue placeholder="Select a client" /></SelectTrigger>
+                            <SelectContent>
+                              {clients.map(c => {
+                                const unbilledHours = (timeEntries.filter(e => e.clientId === c.id && e.billable && !e.invoiced).reduce((a, e) => a + (e.durationMinutes || 0), 0) / 60);
+                                return <SelectItem key={c.id} value={c.id}>{c.name} ({unbilledHours.toFixed(1)} unbilled hours)</SelectItem>;
+                              })}
+                            </SelectContent>
+                          </Select>
                         </div>
-                      ))}
+                        {selectedClientForInvoice && (
+                          <div className="p-3 bg-slate-50 rounded-lg">
+                            <p className="text-sm text-muted-foreground">Unbilled entries: {timeEntries.filter(e => e.clientId === selectedClientForInvoice && e.billable && !e.invoiced).length}</p>
+                            <p className="text-sm text-muted-foreground">Total hours: {(timeEntries.filter(e => e.clientId === selectedClientForInvoice && e.billable && !e.invoiced).reduce((a, e) => a + (e.durationMinutes || 0), 0) / 60).toFixed(1)}</p>
+                          </div>
+                        )}
+                        <Button onClick={() => { if (selectedClientForInvoice) generateInvoiceMutation.mutate({ clientId: selectedClientForInvoice }); }} className="w-full" disabled={!selectedClientForInvoice || generateInvoiceMutation.isPending} data-testid="button-confirm-generate-invoice">
+                          {generateInvoiceMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}Generate Invoice
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[300px]">
+                    <div className="space-y-3">
+                      {invoices.length === 0 ? <p className="text-center text-muted-foreground py-8">No invoices yet. Generate your first invoice.</p> : invoices.map((invoice) => {
+                        const invoiceClient = clients.find(c => c.id === invoice.clientId);
+                        return (
+                          <div key={invoice.id} className="p-4 rounded-lg border border-slate-200" data-testid={`invoice-card-${invoice.id}`}>
+                            <div className="flex items-center justify-between mb-2"><span className="font-medium">{invoice.invoiceNumber}</span><Badge variant={invoice.status === "paid" ? "default" : invoice.status === "overdue" ? "destructive" : "secondary"}>{invoice.status}</Badge></div>
+                            <div className="flex items-center justify-between text-sm text-muted-foreground"><span>Issued: {invoice.issueDate ? new Date(invoice.issueDate).toLocaleDateString() : "N/A"}</span><span className="font-bold text-lg">${Number(invoice.total || 0).toFixed(2)}</span></div>
+                            {invoiceClient && <p className="text-xs text-muted-foreground mt-1"><Building2 className="w-3 h-3 inline mr-1" />{invoiceClient.name}</p>}
+                          </div>
+                        );
+                      })}
                     </div>
                   </ScrollArea>
                 </CardContent>
               </Card>
-              <Card>
-                <CardHeader><CardTitle className="font-serif">Billing Summary</CardTitle></CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"><span>Unbilled Hours</span><span className="font-bold text-xl">{(timeEntries.filter(e => e.billable && !e.invoiced).reduce((a, e) => a + (e.durationMinutes || 0), 0) / 60).toFixed(1)}</span></div>
-                  <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg"><span>Paid</span><span className="font-bold text-xl text-green-600">${invoices.filter(i => i.status === "paid").reduce((a, i) => a + Number(i.total || 0), 0).toFixed(2)}</span></div>
-                  <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg"><span>Outstanding</span><span className="font-bold text-xl text-yellow-600">${invoices.filter(i => i.status !== "paid").reduce((a, i) => a + Number(i.total || 0), 0).toFixed(2)}</span></div>
-                </CardContent>
-              </Card>
+              
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader><CardTitle className="font-serif text-base">Billing Summary</CardTitle></CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"><span>Unbilled Hours</span><span className="font-bold text-xl">{(timeEntries.filter(e => e.billable && !e.invoiced).reduce((a, e) => a + (e.durationMinutes || 0), 0) / 60).toFixed(1)}</span></div>
+                    <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg"><span>Paid</span><span className="font-bold text-xl text-green-600">${invoices.filter(i => i.status === "paid").reduce((a, i) => a + Number(i.total || 0), 0).toFixed(2)}</span></div>
+                    <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg"><span>Outstanding</span><span className="font-bold text-xl text-yellow-600">${invoices.filter(i => i.status !== "paid").reduce((a, i) => a + Number(i.total || 0), 0).toFixed(2)}</span></div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="font-serif text-base">Contract Templates</CardTitle>
+                    <Dialog open={contractTemplateDialogOpen} onOpenChange={setContractTemplateDialogOpen}>
+                      <DialogTrigger asChild><Button size="sm" variant="outline" data-testid="button-add-contract-template"><Plus className="w-4 h-4 mr-1" />Add</Button></DialogTrigger>
+                      <DialogContent className="max-w-2xl">
+                        <DialogHeader><DialogTitle>Create Contract Template</DialogTitle><DialogDescription>Create a reusable template with placeholder variables like {"{{client_name}}"}</DialogDescription></DialogHeader>
+                        <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); createContractTemplateMutation.mutate({ name: fd.get("name") as string, templateType: fd.get("templateType") as string, description: fd.get("description") as string, content: fd.get("content") as string, variables: fd.get("variables") as string }); }} className="space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2"><Label>Template Name</Label><Input name="name" placeholder="e.g., Standard NDA" required data-testid="input-template-name" /></div>
+                            <div className="space-y-2">
+                              <Label>Contract Type</Label>
+                              <Select name="templateType" defaultValue="nda">
+                                <SelectTrigger data-testid="select-template-type"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  {CONTRACT_TYPES.map(ct => <SelectItem key={ct.value} value={ct.value}>{ct.label}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          <div className="space-y-2"><Label>Description</Label><Input name="description" placeholder="Template description" data-testid="input-template-description" /></div>
+                          <div className="space-y-2"><Label>Variables (comma-separated)</Label><Input name="variables" placeholder="client_name, effective_date, scope" data-testid="input-template-variables" /></div>
+                          <div className="space-y-2"><Label>Template Content</Label><Textarea name="content" placeholder="Enter contract template with {{placeholders}}..." className="min-h-[150px]" required data-testid="textarea-template-content" /></div>
+                          <Button type="submit" className="w-full" disabled={createContractTemplateMutation.isPending} data-testid="button-submit-contract-template">{createContractTemplateMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}Create Template</Button>
+                        </form>
+                      </DialogContent>
+                    </Dialog>
+                  </CardHeader>
+                  <CardContent>
+                    <ScrollArea className="h-[120px]">
+                      {contractTemplates.length === 0 ? <p className="text-sm text-muted-foreground text-center py-4">No templates created</p> : (
+                        <div className="space-y-2">
+                          {contractTemplates.map(template => (
+                            <div key={template.id} className="p-2 bg-slate-50 rounded flex items-center justify-between" data-testid={`contract-template-${template.id}`}>
+                              <div>
+                                <p className="text-sm font-medium">{template.name}</p>
+                                <p className="text-xs text-muted-foreground">{CONTRACT_TYPES.find(ct => ct.value === template.templateType)?.label}</p>
+                              </div>
+                              <Button size="sm" variant="ghost" onClick={() => { setSelectedTemplateForContract(template.id); setContractDialogOpen(true); }} data-testid={`button-use-template-${template.id}`}>Use</Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="font-serif text-base">Contracts</CardTitle>
+                    <Dialog open={contractDialogOpen} onOpenChange={(open) => { setContractDialogOpen(open); if (!open) setSelectedTemplateForContract(null); }}>
+                      <DialogTrigger asChild><Button size="sm" variant="outline" data-testid="button-add-contract"><Plus className="w-4 h-4 mr-1" />Add</Button></DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader><DialogTitle>{selectedTemplateForContract ? "Create Contract from Template" : "Create Contract"}</DialogTitle><DialogDescription>Create a new contract for a client</DialogDescription></DialogHeader>
+                        <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); if (selectedTemplateForContract) { createContractFromTemplateMutation.mutate({ templateId: selectedTemplateForContract, clientId: fd.get("clientId") as string }); } else { createContractMutation.mutate({ clientId: fd.get("clientId") as string, contractType: fd.get("contractType") as string, title: fd.get("title") as string, content: fd.get("content") as string, status: "draft" }); } }} className="space-y-4">
+                          <div className="space-y-2">
+                            <Label>Client</Label>
+                            <Select name="clientId" required>
+                              <SelectTrigger data-testid="select-contract-client"><SelectValue placeholder="Select client" /></SelectTrigger>
+                              <SelectContent>
+                                {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          {selectedTemplateForContract ? (
+                            <div className="p-3 bg-slate-50 rounded-lg">
+                              <p className="text-sm font-medium">Using template: {contractTemplates.find(t => t.id === selectedTemplateForContract)?.name}</p>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="space-y-2"><Label>Title</Label><Input name="title" placeholder="Contract title" required data-testid="input-contract-title" /></div>
+                              <div className="space-y-2">
+                                <Label>Contract Type</Label>
+                                <Select name="contractType" defaultValue="nda">
+                                  <SelectTrigger data-testid="select-contract-type"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    {CONTRACT_TYPES.map(ct => <SelectItem key={ct.value} value={ct.value}>{ct.label}</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-2"><Label>Content (optional)</Label><Textarea name="content" placeholder="Contract content..." className="min-h-[100px]" data-testid="textarea-contract-content" /></div>
+                            </>
+                          )}
+                          <Button type="submit" className="w-full" disabled={createContractMutation.isPending || createContractFromTemplateMutation.isPending} data-testid="button-submit-contract">
+                            {(createContractMutation.isPending || createContractFromTemplateMutation.isPending) ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}Create Contract
+                          </Button>
+                        </form>
+                      </DialogContent>
+                    </Dialog>
+                  </CardHeader>
+                  <CardContent>
+                    <ScrollArea className="h-[150px]">
+                      {contracts.length === 0 ? <p className="text-sm text-muted-foreground text-center py-4">No contracts created</p> : (
+                        <div className="space-y-2">
+                          {contracts.map(contract => {
+                            const contractClient = clients.find(c => c.id === contract.clientId);
+                            return (
+                              <div key={contract.id} className="p-2 bg-slate-50 rounded flex items-center justify-between" data-testid={`contract-${contract.id}`}>
+                                <div>
+                                  <p className="text-sm font-medium">{contract.title}</p>
+                                  <p className="text-xs text-muted-foreground">{contractClient?.name} • {CONTRACT_TYPES.find(ct => ct.value === contract.contractType)?.label}</p>
+                                </div>
+                                <Badge variant={contract.status === "signed" ? "default" : contract.status === "pending_signature" ? "secondary" : "outline"} data-testid={`contract-status-${contract.id}`}>
+                                  {contract.status === "draft" ? "Draft" : contract.status === "pending_signature" ? "Pending" : contract.status === "signed" ? "Signed" : contract.status}
+                                </Badge>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           </TabsContent>
 

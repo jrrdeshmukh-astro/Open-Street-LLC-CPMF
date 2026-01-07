@@ -59,15 +59,15 @@ export default function Home() {
                     <LayoutDashboard className="w-4 h-4" />
                     Dashboard
                   </Link>
-                  <a href="/api/logout" className="inline-flex items-center gap-2 border border-slate-200 hover:bg-slate-100 h-9 rounded-md px-3 text-sm font-medium transition-colors text-muted-foreground" data-testid="button-logout">
+                  <button onClick={() => fetch("/api/auth/logout", { method: "POST", credentials: "include" }).then(() => window.location.reload())} className="inline-flex items-center gap-2 border border-slate-200 hover:bg-slate-100 h-9 rounded-md px-3 text-sm font-medium transition-colors text-muted-foreground" data-testid="button-logout">
                     <LogOut className="w-4 h-4" />
-                  </a>
+                  </button>
                 </>
               ) : (
-                <a href="/api/login" className="inline-flex items-center gap-2 bg-[#bfa15f] hover:bg-[#bfa15f]/90 text-white h-9 rounded-md px-3 text-sm font-medium transition-colors" data-testid="button-login">
+                <Link href="/login" className="inline-flex items-center gap-2 bg-[#bfa15f] hover:bg-[#bfa15f]/90 text-white h-9 rounded-md px-3 text-sm font-medium transition-colors" data-testid="button-login">
                   <LogIn className="w-4 h-4" />
                   Login
-                </a>
+                </Link>
               )
             )}
           </div>

@@ -7,9 +7,12 @@ import {
   insertTimeEntrySchema, insertActionSchema, insertInvoiceSchema, insertInvoiceItemSchema,
   insertDebriefTemplateSchema, insertDebriefRecordSchema, insertMessageSchema,
   insertGuideSchema, insertFormTemplateSchema, insertFormSubmissionSchema,
-  insertOpportunitySchema, insertWorkflowInstanceSchema
+  insertOpportunitySchema, insertWorkflowInstanceSchema, insertCollaborationSchema,
+  users
 } from "@shared/schema";
 import { searchSamOpportunities, NOTICE_TYPES, SET_ASIDE_TYPES } from "./sam-api";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   // Workflow Progress
@@ -562,6 +565,110 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ message: "Failed to delete workflow instance" });
+    }
+  });
+
+  // Collaborations - Shared workflows between industry partners and academia
+  app.get("/api/collaborations", requireAuth, async (req: any, res) => {
+    try {
+      const collabs = await storage.getCollaborationsByUser(req.session.userId);
+      res.json(collabs);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch collaborations" });
+    }
+  });
+
+  app.get("/api/collaborations/pending", requireAuth, async (req: any, res) => {
+    try {
+      const invites = await storage.getPendingInvites(req.session.userId);
+      res.json(invites);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch pending invites" });
+    }
+  });
+
+  app.get("/api/collaborations/client/:clientId", requireAuth, async (req: any, res) => {
+    try {
+      const collabs = await storage.getCollaborationsByClient(req.params.clientId);
+      res.json(collabs);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch client collaborations" });
+    }
+  });
+
+  app.post("/api/collaborations", requireAuth, async (req: any, res) => {
+    try {
+      const { clientId, collaboratorEmail } = req.body;
+      if (!clientId || !collaboratorEmail) {
+        return res.status(400).json({ message: "Client ID and collaborator email are required" });
+      }
+      
+      // Find collaborator by email
+      const [collaborator] = await db.select().from(users).where(eq(users.email, collaboratorEmail));
+      if (!collaborator) {
+        return res.status(404).json({ message: "No user found with that email address" });
+      }
+      
+      // Can't invite yourself
+      if (collaborator.id === req.session.userId) {
+        return res.status(400).json({ message: "Cannot invite yourself as a collaborator" });
+      }
+      
+      // Only industry_partner and academia can collaborate
+      if (!["industry_partner", "academia"].includes(collaborator.role || "")) {
+        return res.status(400).json({ message: "Only industry partners and academia users can be invited" });
+      }
+      
+      const data = insertCollaborationSchema.parse({
+        clientId,
+        ownerId: req.session.userId,
+        collaboratorId: collaborator.id,
+        collaboratorEmail,
+        status: "pending"
+      });
+      
+      const collaboration = await storage.createCollaboration(data);
+      res.json(collaboration);
+    } catch (error) {
+      console.error("Failed to create collaboration:", error);
+      res.status(500).json({ message: "Failed to create collaboration" });
+    }
+  });
+
+  app.patch("/api/collaborations/:id/accept", requireAuth, async (req: any, res) => {
+    try {
+      const collaboration = await storage.updateCollaborationStatus(req.params.id, req.session.userId, "accepted");
+      res.json(collaboration);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to accept collaboration" });
+    }
+  });
+
+  app.patch("/api/collaborations/:id/decline", requireAuth, async (req: any, res) => {
+    try {
+      const collaboration = await storage.updateCollaborationStatus(req.params.id, req.session.userId, "declined");
+      res.json(collaboration);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to decline collaboration" });
+    }
+  });
+
+  app.delete("/api/collaborations/:id", requireAuth, async (req: any, res) => {
+    try {
+      await storage.deleteCollaboration(req.params.id, req.session.userId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete collaboration" });
+    }
+  });
+
+  // Get shared workflow progress for a client
+  app.get("/api/collaborations/client/:clientId/progress", requireAuth, async (req: any, res) => {
+    try {
+      const sharedProgress = await storage.getSharedWorkflowProgress(req.params.clientId);
+      res.json(sharedProgress);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch shared progress" });
     }
   });
 

@@ -1,6 +1,6 @@
 import { 
   workflowProgress, artifacts, clients, timeEntries, actions, invoices, invoiceItems, debriefTemplates, debriefRecords, messages,
-  guides, formTemplates, formSubmissions, opportunities, workflowTemplates, workflowInstances, collaborations,
+  guides, formTemplates, formSubmissions, opportunities, workflowTemplates, workflowInstances, collaborations, jiraSettings,
   type WorkflowProgress, type InsertWorkflowProgress,
   type Artifact, type InsertArtifact,
   type Client, type InsertClient,
@@ -17,7 +17,8 @@ import {
   type Opportunity, type InsertOpportunity,
   type WorkflowTemplate, type InsertWorkflowTemplate,
   type WorkflowInstance, type InsertWorkflowInstance,
-  type Collaboration, type InsertCollaboration
+  type Collaboration, type InsertCollaboration,
+  type JiraSettings, type InsertJiraSettings
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc, or, inArray } from "drizzle-orm";
@@ -491,6 +492,58 @@ export class DatabaseStorage {
       }))
     );
     return results;
+  }
+
+  // Jira Settings
+  async getJiraSettings(userId: string): Promise<JiraSettings | undefined> {
+    const [settings] = await db.select().from(jiraSettings).where(eq(jiraSettings.userId, userId));
+    return settings;
+  }
+
+  async upsertJiraSettings(settings: InsertJiraSettings): Promise<JiraSettings> {
+    const existing = await this.getJiraSettings(settings.userId);
+    if (existing) {
+      const [updated] = await db.update(jiraSettings)
+        .set({ ...settings, updatedAt: new Date() })
+        .where(eq(jiraSettings.userId, settings.userId))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(jiraSettings).values(settings).returning();
+    return created;
+  }
+
+  async deleteJiraSettings(userId: string): Promise<void> {
+    await db.delete(jiraSettings).where(eq(jiraSettings.userId, userId));
+  }
+
+  // Update action with Jira info
+  async updateActionJiraInfo(actionId: string, userId: string, jiraInfo: {
+    jiraIssueId?: string;
+    jiraKey?: string;
+    jiraStatus?: string;
+    jiraProjectKey?: string;
+    lastSyncedAt?: Date;
+  }): Promise<Action> {
+    const [updated] = await db.update(actions)
+      .set({ ...jiraInfo, updatedAt: new Date() })
+      .where(and(eq(actions.id, actionId), eq(actions.userId, userId)))
+      .returning();
+    return updated;
+  }
+
+  // Get actions with Jira links
+  async getActionsWithJira(userId: string): Promise<Action[]> {
+    return await db.select().from(actions)
+      .where(and(eq(actions.userId, userId)))
+      .orderBy(desc(actions.createdAt));
+  }
+
+  // Get action by Jira issue ID
+  async getActionByJiraId(jiraIssueId: string, userId: string): Promise<Action | undefined> {
+    const [action] = await db.select().from(actions)
+      .where(and(eq(actions.jiraIssueId, jiraIssueId), eq(actions.userId, userId)));
+    return action;
   }
 }
 

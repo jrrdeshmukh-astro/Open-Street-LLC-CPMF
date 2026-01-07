@@ -78,6 +78,26 @@ export const actions = pgTable("actions", {
   status: varchar("status").default("pending"), // pending, in_progress, completed, overdue
   priority: varchar("priority").default("medium"), // low, medium, high, urgent
   assignee: varchar("assignee"),
+  // Jira integration fields
+  jiraIssueId: varchar("jira_issue_id"),
+  jiraKey: varchar("jira_key"), // e.g., PROJ-123
+  jiraStatus: varchar("jira_status"),
+  jiraProjectKey: varchar("jira_project_key"),
+  lastSyncedAt: timestamp("last_synced_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Jira settings for user's Jira connection
+export const jiraSettings = pgTable("jira_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().unique(),
+  jiraDomain: varchar("jira_domain").notNull(), // e.g., yourcompany.atlassian.net
+  jiraEmail: varchar("jira_email").notNull(),
+  jiraApiToken: varchar("jira_api_token").notNull(), // Encrypted or stored securely
+  defaultProjectKey: varchar("default_project_key"),
+  syncEnabled: boolean("sync_enabled").default(true),
+  lastSyncAt: timestamp("last_sync_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -370,6 +390,12 @@ export const insertFormSubmissionSchema = createInsertSchema(formSubmissions).om
   updatedAt: true,
 });
 
+export const insertJiraSettingsSchema = createInsertSchema(jiraSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type WorkflowProgress = typeof workflowProgress.$inferSelect;
 export type InsertWorkflowProgress = z.infer<typeof insertWorkflowProgressSchema>;
@@ -399,6 +425,8 @@ export type FormTemplate = typeof formTemplates.$inferSelect;
 export type InsertFormTemplate = z.infer<typeof insertFormTemplateSchema>;
 export type FormSubmission = typeof formSubmissions.$inferSelect;
 export type InsertFormSubmission = z.infer<typeof insertFormSubmissionSchema>;
+export type JiraSettings = typeof jiraSettings.$inferSelect;
+export type InsertJiraSettings = z.infer<typeof insertJiraSettingsSchema>;
 
 // Opportunity schemas
 export const insertOpportunitySchema = createInsertSchema(opportunities).omit({

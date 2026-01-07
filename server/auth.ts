@@ -3,7 +3,7 @@ import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import bcrypt from "bcrypt";
 import { pool, db } from "./db";
-import { users, registerSchema, loginSchema } from "@shared/models/auth";
+import { users, registerSchema, loginSchema, UserRole } from "@shared/models/auth";
 import { eq } from "drizzle-orm";
 
 declare module "express-session" {
@@ -33,7 +33,7 @@ export function setupAuth(app: Express) {
       cookie: {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+        maxAge: 30 * 24 * 60 * 60 * 1000,
         sameSite: "lax",
       },
     })
@@ -47,6 +47,21 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+export function requireRole(...roles: UserRole[]) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.session.userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    
+    const [user] = await db.select().from(users).where(eq(users.id, req.session.userId));
+    if (!user || !roles.includes(user.role as UserRole)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    
+    next();
+  };
+}
+
 export function registerAuthRoutes(app: Express) {
   app.post("/api/auth/register", async (req: Request, res: Response) => {
     try {
@@ -55,7 +70,7 @@ export function registerAuthRoutes(app: Express) {
         return res.status(400).json({ message: parsed.error.errors[0].message });
       }
 
-      const { email, password, firstName, lastName } = parsed.data;
+      const { email, password, firstName, lastName, role, organization } = parsed.data;
 
       const [existingUser] = await db.select().from(users).where(eq(users.email, email));
       if (existingUser) {
@@ -69,6 +84,8 @@ export function registerAuthRoutes(app: Express) {
         passwordHash,
         firstName: firstName || null,
         lastName: lastName || null,
+        role: role || "industry_partner",
+        organization: organization || null,
       }).returning();
 
       req.session.userId = newUser.id;
@@ -78,6 +95,8 @@ export function registerAuthRoutes(app: Express) {
         email: newUser.email,
         firstName: newUser.firstName,
         lastName: newUser.lastName,
+        role: newUser.role,
+        organization: newUser.organization,
       });
     } catch (error) {
       console.error("Registration error:", error);
@@ -111,6 +130,8 @@ export function registerAuthRoutes(app: Express) {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
+        role: user.role,
+        organization: user.organization,
       });
     } catch (error) {
       console.error("Login error:", error);
@@ -144,6 +165,8 @@ export function registerAuthRoutes(app: Express) {
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
+        role: user.role,
+        organization: user.organization,
       });
     } catch (error) {
       console.error("Get user error:", error);

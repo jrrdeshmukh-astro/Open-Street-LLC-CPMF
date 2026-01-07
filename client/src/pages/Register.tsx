@@ -4,9 +4,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, UserPlus, ArrowLeft } from "lucide-react";
+
+const ROLES = [
+  { value: "industry_partner", label: "Industry Partner" },
+  { value: "academia", label: "Academia" },
+];
 
 export default function Register() {
   const [, setLocation] = useLocation();
@@ -17,9 +23,11 @@ export default function Register() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [role, setRole] = useState("industry_partner");
+  const [organization, setOrganization] = useState("");
 
   const registerMutation = useMutation({
-    mutationFn: async (data: { email: string; password: string; firstName?: string; lastName?: string }) => {
+    mutationFn: async (data: { email: string; password: string; firstName?: string; lastName?: string; role: string; organization?: string }) => {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -60,6 +68,8 @@ export default function Register() {
       password,
       firstName: firstName || undefined,
       lastName: lastName || undefined,
+      role,
+      organization: organization || undefined,
     });
   };
 
@@ -106,6 +116,32 @@ export default function Register() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 data-testid="input-email"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="role">Role</Label>
+              <Select value={role} onValueChange={setRole}>
+                <SelectTrigger data-testid="select-role">
+                  <SelectValue placeholder="Select your role" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ROLES.map((r) => (
+                    <SelectItem key={r.value} value={r.value} data-testid={`role-option-${r.value}`}>
+                      {r.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="organization">Organization</Label>
+              <Input
+                id="organization"
+                type="text"
+                placeholder="Your organization"
+                value={organization}
+                onChange={(e) => setOrganization(e.target.value)}
+                data-testid="input-organization"
               />
             </div>
             <div className="space-y-2">

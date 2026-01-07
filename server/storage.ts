@@ -1,5 +1,6 @@
 import { 
   workflowProgress, artifacts, clients, timeEntries, actions, invoices, invoiceItems, debriefTemplates, debriefRecords, messages,
+  guides, formTemplates, formSubmissions,
   type WorkflowProgress, type InsertWorkflowProgress,
   type Artifact, type InsertArtifact,
   type Client, type InsertClient,
@@ -9,10 +10,13 @@ import {
   type InvoiceItem, type InsertInvoiceItem,
   type DebriefTemplate, type InsertDebriefTemplate,
   type DebriefRecord, type InsertDebriefRecord,
-  type Message, type InsertMessage
+  type Message, type InsertMessage,
+  type Guide, type InsertGuide,
+  type FormTemplate, type InsertFormTemplate,
+  type FormSubmission, type InsertFormSubmission
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, asc } from "drizzle-orm";
 
 export class DatabaseStorage {
   // Workflow Progress
@@ -231,6 +235,93 @@ export class DatabaseStorage {
 
   async markMessageRead(id: string, userId: string): Promise<void> {
     await db.update(messages).set({ readAt: new Date() }).where(and(eq(messages.id, id), eq(messages.userId, userId)));
+  }
+
+  // Guides
+  async getGuides(): Promise<Guide[]> {
+    return await db.select().from(guides).where(eq(guides.isActive, true)).orderBy(asc(guides.orderIndex));
+  }
+
+  async getGuidesByComponent(componentId: string, stage?: string): Promise<Guide[]> {
+    if (stage) {
+      return await db.select().from(guides)
+        .where(and(eq(guides.componentId, componentId), eq(guides.stage, stage), eq(guides.isActive, true)))
+        .orderBy(asc(guides.orderIndex));
+    }
+    return await db.select().from(guides)
+      .where(and(eq(guides.componentId, componentId), eq(guides.isActive, true)))
+      .orderBy(asc(guides.orderIndex));
+  }
+
+  async createGuide(guide: InsertGuide): Promise<Guide> {
+    const [created] = await db.insert(guides).values(guide).returning();
+    return created;
+  }
+
+  async updateGuide(id: string, data: Partial<InsertGuide>): Promise<Guide> {
+    const [updated] = await db.update(guides).set({ ...data, updatedAt: new Date() })
+      .where(eq(guides.id, id)).returning();
+    return updated;
+  }
+
+  // Form Templates
+  async getFormTemplates(): Promise<FormTemplate[]> {
+    return await db.select().from(formTemplates).where(eq(formTemplates.isActive, true)).orderBy(asc(formTemplates.orderIndex));
+  }
+
+  async getFormTemplatesByComponent(componentId: string, stage?: string): Promise<FormTemplate[]> {
+    if (stage) {
+      return await db.select().from(formTemplates)
+        .where(and(eq(formTemplates.componentId, componentId), eq(formTemplates.stage, stage), eq(formTemplates.isActive, true)))
+        .orderBy(asc(formTemplates.orderIndex));
+    }
+    return await db.select().from(formTemplates)
+      .where(and(eq(formTemplates.componentId, componentId), eq(formTemplates.isActive, true)))
+      .orderBy(asc(formTemplates.orderIndex));
+  }
+
+  async getFormTemplate(id: string): Promise<FormTemplate | undefined> {
+    const [template] = await db.select().from(formTemplates).where(eq(formTemplates.id, id));
+    return template;
+  }
+
+  async createFormTemplate(template: InsertFormTemplate): Promise<FormTemplate> {
+    const [created] = await db.insert(formTemplates).values(template).returning();
+    return created;
+  }
+
+  // Form Submissions
+  async getFormSubmissions(userId: string): Promise<FormSubmission[]> {
+    return await db.select().from(formSubmissions).where(eq(formSubmissions.userId, userId)).orderBy(desc(formSubmissions.createdAt));
+  }
+
+  async getFormSubmissionsByTemplate(userId: string, templateId: string): Promise<FormSubmission[]> {
+    return await db.select().from(formSubmissions)
+      .where(and(eq(formSubmissions.userId, userId), eq(formSubmissions.templateId, templateId)));
+  }
+
+  async getFormSubmission(id: string, userId: string): Promise<FormSubmission | undefined> {
+    const [submission] = await db.select().from(formSubmissions)
+      .where(and(eq(formSubmissions.id, id), eq(formSubmissions.userId, userId)));
+    return submission;
+  }
+
+  async createFormSubmission(submission: InsertFormSubmission): Promise<FormSubmission> {
+    const [created] = await db.insert(formSubmissions).values(submission).returning();
+    return created;
+  }
+
+  async updateFormSubmission(id: string, userId: string, data: Partial<InsertFormSubmission>): Promise<FormSubmission> {
+    const [updated] = await db.update(formSubmissions).set({ ...data, updatedAt: new Date() })
+      .where(and(eq(formSubmissions.id, id), eq(formSubmissions.userId, userId))).returning();
+    return updated;
+  }
+
+  async submitFormSubmission(id: string, userId: string): Promise<FormSubmission> {
+    const [updated] = await db.update(formSubmissions)
+      .set({ status: "submitted", submittedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(formSubmissions.id, id), eq(formSubmissions.userId, userId))).returning();
+    return updated;
   }
 }
 

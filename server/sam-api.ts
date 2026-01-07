@@ -1,6 +1,27 @@
-import type { InsertOpportunity } from "@shared/schema";
-
 const SAM_API_BASE = "https://api.sam.gov/opportunities/v2";
+
+export interface SamOpportunityResult {
+  externalId: string;
+  title: string;
+  solicitationNumber: string | null;
+  agency: string | null;
+  subAgency: string | null;
+  office: string | null;
+  noticeType: string | null;
+  contractType: string | null;
+  naicsCodes: string | null;
+  pscCodes: string | null;
+  setAsideType: string | null;
+  responseDeadline: string | null;
+  postedDate: string | null;
+  archiveDate: string | null;
+  placeOfPerformance: string | null;
+  description: string | null;
+  synopsis: string | null;
+  contactInfo: string | null;
+  attachmentLinks: string | null;
+  rawJson: string;
+}
 
 interface SamSearchParams {
   keyword?: string;
@@ -60,7 +81,7 @@ interface SamSearchResponse {
 export async function searchSamOpportunities(
   apiKey: string,
   params: SamSearchParams
-): Promise<{ opportunities: InsertOpportunity[]; totalRecords: number }> {
+): Promise<{ opportunities: SamOpportunityResult[]; totalRecords: number }> {
   const queryParams = new URLSearchParams();
   
   if (params.keyword) queryParams.set("keyword", params.keyword);
@@ -92,7 +113,7 @@ export async function searchSamOpportunities(
   
   const data: SamSearchResponse = await response.json();
   
-  const opportunities: InsertOpportunity[] = (data.opportunitiesData || []).map(opp => ({
+  const opportunities = (data.opportunitiesData || []).map(opp => ({
     externalId: opp.noticeId,
     title: opp.title || "Untitled Opportunity",
     solicitationNumber: opp.solicitationNumber || null,
@@ -104,9 +125,9 @@ export async function searchSamOpportunities(
     naicsCodes: opp.naicsCode ? JSON.stringify([opp.naicsCode]) : null,
     pscCodes: opp.classificationCode ? JSON.stringify([opp.classificationCode]) : null,
     setAsideType: opp.setAsideCode || null,
-    responseDeadline: opp.responseDeadLine ? new Date(opp.responseDeadLine) : null,
-    postedDate: opp.postedDate ? new Date(opp.postedDate) : null,
-    archiveDate: opp.archiveDate ? new Date(opp.archiveDate) : null,
+    responseDeadline: opp.responseDeadLine || null,
+    postedDate: opp.postedDate || null,
+    archiveDate: opp.archiveDate || null,
     placeOfPerformance: opp.placeOfPerformance ? JSON.stringify(opp.placeOfPerformance) : null,
     description: opp.description || null,
     synopsis: null,
@@ -124,7 +145,7 @@ export async function searchSamOpportunities(
 export async function getSamOpportunityDetails(
   apiKey: string,
   noticeId: string
-): Promise<InsertOpportunity | null> {
+): Promise<SamOpportunityResult | null> {
   const url = `${SAM_API_BASE}/synopsis/${noticeId}`;
   
   const response = await fetch(url, {
@@ -154,9 +175,9 @@ export async function getSamOpportunityDetails(
     naicsCodes: opp.naicsCode ? JSON.stringify([opp.naicsCode]) : null,
     pscCodes: opp.classificationCode ? JSON.stringify([opp.classificationCode]) : null,
     setAsideType: opp.setAsideCode || null,
-    responseDeadline: opp.responseDeadLine ? new Date(opp.responseDeadLine) : null,
-    postedDate: opp.postedDate ? new Date(opp.postedDate) : null,
-    archiveDate: opp.archiveDate ? new Date(opp.archiveDate) : null,
+    responseDeadline: opp.responseDeadLine || null,
+    postedDate: opp.postedDate || null,
+    archiveDate: opp.archiveDate || null,
     placeOfPerformance: opp.placeOfPerformance ? JSON.stringify(opp.placeOfPerformance) : null,
     description: opp.description || null,
     synopsis: null,

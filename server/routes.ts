@@ -484,11 +484,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/opportunities", requireAuth, async (req: any, res) => {
     try {
-      const data = insertOpportunitySchema.parse(req.body);
+      const body = {
+        ...req.body,
+        responseDeadline: req.body.responseDeadline ? new Date(req.body.responseDeadline) : null,
+        postedDate: req.body.postedDate ? new Date(req.body.postedDate) : null,
+        archiveDate: req.body.archiveDate ? new Date(req.body.archiveDate) : null,
+      };
+      const data = insertOpportunitySchema.parse(body);
       const opportunity = await storage.upsertOpportunity(data);
       res.json(opportunity);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to save opportunity" });
+    } catch (error: any) {
+      console.error("Failed to save opportunity:", error);
+      res.status(500).json({ message: error.message || "Failed to save opportunity" });
     }
   });
 

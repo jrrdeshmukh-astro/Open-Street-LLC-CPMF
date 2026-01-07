@@ -603,6 +603,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ message: "Client ID and collaborator email are required" });
       }
       
+      // Check if current user is industry_partner or academia
+      const [currentUser] = await db.select().from(users).where(eq(users.id, req.session.userId));
+      if (!currentUser || !["industry_partner", "academia"].includes(currentUser.role || "")) {
+        return res.status(403).json({ message: "Only industry partners and academia can invite collaborators" });
+      }
+      
+      // Verify the client belongs to the current user
+      const client = await storage.getClient(clientId, req.session.userId);
+      if (!client) {
+        return res.status(404).json({ message: "Client not found or you don't have access" });
+      }
+      
       // Find collaborator by email
       const [collaborator] = await db.select().from(users).where(eq(users.email, collaboratorEmail));
       if (!collaborator) {
@@ -619,15 +631,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ message: "Only industry partners and academia users can be invited" });
       }
       
-      const data = insertCollaborationSchema.parse({
+      const collaboration = await storage.createCollaboration({
         clientId,
         ownerId: req.session.userId,
         collaboratorId: collaborator.id,
-        collaboratorEmail,
+        collaboratorEmail: currentUser.email, // Store inviter's email for display
         status: "pending"
       });
       
-      const collaboration = await storage.createCollaboration(data);
       res.json(collaboration);
     } catch (error) {
       console.error("Failed to create collaboration:", error);
@@ -637,6 +648,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.patch("/api/collaborations/:id/accept", requireAuth, async (req: any, res) => {
     try {
+      // Verify this user is the collaborator (invitee) for this collaboration
+      const collab = await storage.getCollaboration(req.params.id);
+      if (!collab) {
+        return res.status(404).json({ message: "Collaboration not found" });
+      }
+      if (collab.collaboratorId !== req.session.userId) {
+        return res.status(403).json({ message: "You can only accept invitations sent to you" });
+      }
+      
       const collaboration = await storage.updateCollaborationStatus(req.params.id, req.session.userId, "accepted");
       res.json(collaboration);
     } catch (error) {
@@ -646,6 +666,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.patch("/api/collaborations/:id/decline", requireAuth, async (req: any, res) => {
     try {
+      // Verify this user is the collaborator (invitee) for this collaboration
+      const collab = await storage.getCollaboration(req.params.id);
+      if (!collab) {
+        return res.status(404).json({ message: "Collaboration not found" });
+      }
+      if (collab.collaboratorId !== req.session.userId) {
+        return res.status(403).json({ message: "You can only decline invitations sent to you" });
+      }
+      
       const collaboration = await storage.updateCollaborationStatus(req.params.id, req.session.userId, "declined");
       res.json(collaboration);
     } catch (error) {

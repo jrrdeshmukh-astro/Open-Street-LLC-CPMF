@@ -14,13 +14,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { 
   FileText, LogOut, CheckCircle2, Circle, Users, Shield, RefreshCw, Search, Target, Home, Save, Loader2,
-  Clock, Calendar, DollarSign, MessageSquare, ClipboardList, Plus, Play, Pause, Building2, BookOpen, FileCheck, ChevronRight
+  Clock, Calendar, DollarSign, MessageSquare, ClipboardList, Plus, Play, Pause, Building2, BookOpen, FileCheck, ChevronRight,
+  UserPlus, Check, X, Share2
 } from "lucide-react";
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import ReactMarkdown from "react-markdown";
-import type { WorkflowProgress, Artifact, Client, TimeEntry, Action, Invoice, DebriefTemplate, Message, Guide, FormTemplate, FormSubmission } from "@shared/schema";
+import type { WorkflowProgress, Artifact, Client, TimeEntry, Action, Invoice, DebriefTemplate, Message, Guide, FormTemplate, FormSubmission, Collaboration } from "@shared/schema";
 
 const FRAMEWORK_COMPONENTS = [
   { id: "engagement_structure", name: "Engagement Structure", icon: Users, description: "Program charter, stakeholder roles, and meeting cadence", artifacts: ["program_charter", "stakeholder_map", "meeting_schedule"] },
@@ -67,7 +68,11 @@ export default function Dashboard() {
   const { data: allGuides = [] } = useQuery<Guide[]>({ queryKey: ["/api/guides"], enabled: !!user });
   const { data: allFormTemplates = [] } = useQuery<FormTemplate[]>({ queryKey: ["/api/form-templates"], enabled: !!user });
   const { data: formSubmissions = [] } = useQuery<FormSubmission[]>({ queryKey: ["/api/form-submissions"], enabled: !!user });
+  const { data: collaborations = [] } = useQuery<Collaboration[]>({ queryKey: ["/api/collaborations"], enabled: !!user });
+  const { data: pendingInvites = [] } = useQuery<Collaboration[]>({ queryKey: ["/api/collaborations/pending"], enabled: !!user });
   const [selectedGuide, setSelectedGuide] = useState<Guide | null>(null);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [selectedClientForCollab, setSelectedClientForCollab] = useState<string | null>(null);
   const [resourceComponent, setResourceComponent] = useState(FRAMEWORK_COMPONENTS[0].id);
   const [resourceStage, setResourceStage] = useState("initiation");
   const [selectedFormTemplate, setSelectedFormTemplate] = useState<FormTemplate | null>(null);
@@ -131,6 +136,51 @@ export default function Dashboard() {
       setFormDialogOpen(false);
       setSelectedFormTemplate(null);
       setFormData({});
+    },
+  });
+
+  const inviteCollaboratorMutation = useMutation({
+    mutationFn: async (data: { clientId: string; collaboratorEmail: string }) => {
+      const res = await fetch("/api/collaborations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data), credentials: "include" });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to invite collaborator");
+      }
+      return res.json();
+    },
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ["/api/collaborations"] }); 
+      toast({ title: "Invitation sent", description: "Collaborator will see the invite when they log in." }); 
+      setInviteEmail("");
+      setSelectedClientForCollab(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to invite", description: error.message, variant: "destructive" });
+    }
+  });
+
+  const acceptInviteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/collaborations/${id}/accept`, { method: "PATCH", credentials: "include" });
+      if (!res.ok) throw new Error("Failed to accept invitation");
+      return res.json();
+    },
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ["/api/collaborations"] }); 
+      queryClient.invalidateQueries({ queryKey: ["/api/collaborations/pending"] }); 
+      toast({ title: "Invitation accepted", description: "You can now collaborate on this client's workflow." }); 
+    },
+  });
+
+  const declineInviteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/collaborations/${id}/decline`, { method: "PATCH", credentials: "include" });
+      if (!res.ok) throw new Error("Failed to decline invitation");
+      return res.json();
+    },
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ["/api/collaborations/pending"] }); 
+      toast({ title: "Invitation declined" }); 
     },
   });
 
@@ -509,6 +559,41 @@ export default function Dashboard() {
 
           {/* Clients Tab */}
           <TabsContent value="clients">
+            {/* Pending Collaboration Invites */}
+            {pendingInvites.length > 0 && (
+              <Card className="mb-6 border-amber-200 bg-amber-50">
+                <CardHeader className="pb-3">
+                  <CardTitle className="font-serif text-lg flex items-center gap-2">
+                    <UserPlus className="w-5 h-5 text-amber-600" />
+                    Pending Collaboration Invites
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {pendingInvites.map((invite) => {
+                      const inviteClient = clients.find(c => c.id === invite.clientId);
+                      return (
+                        <div key={invite.id} className="flex items-center justify-between p-3 bg-white rounded-lg border" data-testid={`invite-${invite.id}`}>
+                          <div>
+                            <p className="font-medium">Collaboration request</p>
+                            <p className="text-sm text-muted-foreground">From: {invite.collaboratorEmail}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button size="sm" onClick={() => acceptInviteMutation.mutate(invite.id)} disabled={acceptInviteMutation.isPending} data-testid={`accept-invite-${invite.id}`}>
+                              <Check className="w-4 h-4 mr-1" />Accept
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => declineInviteMutation.mutate(invite.id)} disabled={declineInviteMutation.isPending} data-testid={`decline-invite-${invite.id}`}>
+                              <X className="w-4 h-4 mr-1" />Decline
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <div className="grid lg:grid-cols-3 gap-6">
               <Card className="lg:col-span-2">
                 <CardHeader className="flex flex-row items-center justify-between">
@@ -530,25 +615,99 @@ export default function Dashboard() {
                 <CardContent>
                   <ScrollArea className="h-[400px]">
                     <div className="space-y-3">
-                      {clients.length === 0 ? <p className="text-center text-muted-foreground py-8">No clients yet. Add your first client to get started.</p> : clients.map((client) => (
-                        <div key={client.id} className="p-4 rounded-lg border border-slate-200 hover:border-primary/50 transition-colors" data-testid={`client-card-${client.id}`}>
-                          <div className="flex items-center justify-between mb-2"><span className="font-medium">{client.name}</span><Badge variant="outline">{client.sector || "N/A"}</Badge></div>
-                          <p className="text-sm text-muted-foreground">{client.organization}</p>
-                          <p className="text-sm text-muted-foreground">{client.email}</p>
-                        </div>
-                      ))}
+                      {clients.length === 0 ? <p className="text-center text-muted-foreground py-8">No clients yet. Add your first client to get started.</p> : clients.map((client) => {
+                        const clientCollabs = collaborations.filter(c => c.clientId === client.id && c.status === "accepted");
+                        return (
+                          <div key={client.id} className="p-4 rounded-lg border border-slate-200 hover:border-primary/50 transition-colors" data-testid={`client-card-${client.id}`}>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-medium">{client.name}</span>
+                              <div className="flex items-center gap-2">
+                                {clientCollabs.length > 0 && (
+                                  <Badge variant="secondary" className="flex items-center gap-1">
+                                    <Share2 className="w-3 h-3" />
+                                    {clientCollabs.length} collaborator{clientCollabs.length > 1 ? 's' : ''}
+                                  </Badge>
+                                )}
+                                <Badge variant="outline">{client.sector || "N/A"}</Badge>
+                              </div>
+                            </div>
+                            <p className="text-sm text-muted-foreground">{client.organization}</p>
+                            <p className="text-sm text-muted-foreground mb-3">{client.email}</p>
+                            
+                            {/* Invite Collaborator - Only for industry_partner and academia */}
+                            {(user?.role === "industry_partner" || user?.role === "academia") && (
+                              <div className="pt-3 border-t">
+                                {selectedClientForCollab === client.id ? (
+                                  <div className="flex gap-2">
+                                    <Input 
+                                      placeholder="Enter collaborator's email" 
+                                      value={inviteEmail} 
+                                      onChange={(e) => setInviteEmail(e.target.value)}
+                                      className="flex-1"
+                                      data-testid={`input-invite-email-${client.id}`}
+                                    />
+                                    <Button 
+                                      size="sm" 
+                                      onClick={() => inviteCollaboratorMutation.mutate({ clientId: client.id, collaboratorEmail: inviteEmail })}
+                                      disabled={inviteCollaboratorMutation.isPending || !inviteEmail}
+                                      data-testid={`button-send-invite-${client.id}`}
+                                    >
+                                      {inviteCollaboratorMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send"}
+                                    </Button>
+                                    <Button size="sm" variant="ghost" onClick={() => { setSelectedClientForCollab(null); setInviteEmail(""); }}>
+                                      Cancel
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    onClick={() => setSelectedClientForCollab(client.id)}
+                                    data-testid={`button-invite-collaborator-${client.id}`}
+                                  >
+                                    <UserPlus className="w-4 h-4 mr-2" />
+                                    Invite Collaborator
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </ScrollArea>
                 </CardContent>
               </Card>
-              <Card>
-                <CardHeader><CardTitle className="font-serif">Quick Stats</CardTitle></CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"><span>Total Clients</span><span className="font-bold text-xl">{clients.length}</span></div>
-                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"><span>Active</span><span className="font-bold text-xl text-green-600">{clients.filter(c => c.status === "active").length}</span></div>
-                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"><span>Completed</span><span className="font-bold text-xl text-blue-600">{clients.filter(c => c.status === "completed").length}</span></div>
-                </CardContent>
-              </Card>
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader><CardTitle className="font-serif">Quick Stats</CardTitle></CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"><span>Total Clients</span><span className="font-bold text-xl">{clients.length}</span></div>
+                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"><span>Active</span><span className="font-bold text-xl text-green-600">{clients.filter(c => c.status === "active").length}</span></div>
+                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg"><span>Completed</span><span className="font-bold text-xl text-blue-600">{clients.filter(c => c.status === "completed").length}</span></div>
+                  </CardContent>
+                </Card>
+                
+                {/* Active Collaborations */}
+                {collaborations.filter(c => c.status === "accepted").length > 0 && (
+                  <Card>
+                    <CardHeader><CardTitle className="font-serif text-base">Active Collaborations</CardTitle></CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {collaborations.filter(c => c.status === "accepted").map(collab => {
+                          const collabClient = clients.find(c => c.id === collab.clientId);
+                          return (
+                            <div key={collab.id} className="p-2 bg-slate-50 rounded-lg text-sm" data-testid={`collab-${collab.id}`}>
+                              <p className="font-medium">{collabClient?.name || "Unknown"}</p>
+                              <p className="text-muted-foreground text-xs">{collab.collaboratorEmail}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
             </div>
           </TabsContent>
 

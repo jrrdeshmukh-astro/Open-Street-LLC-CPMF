@@ -2,7 +2,28 @@
 
 ## Overview
 
-This is a corporate marketing website for Open Street LLC, showcasing their Codified Program Management Framework (CPMF). The framework provides a structured, compliant approach to multi-stakeholder engagement between government, industry, and academia. The site includes a main landing page with framework details and a printable trifold brochure page.
+This is a comprehensive web application for Open Street LLC, showcasing their Codified Program Management Framework (CPMF). The framework provides a structured, compliant approach to multi-stakeholder engagement between government, industry, and academia. 
+
+### Features
+- **Public Landing Page**: Corporate marketing with framework details and contact information
+- **Printable Trifold Brochure**: Print-ready marketing materials
+- **Authenticated Dashboard**: Role-based access with 8 management tabs:
+  - Workflow: Track progress across 5 CPMF components (Engagement, Governance, Facilitation, Analysis, Continuation)
+  - Resources: Guides and interactive forms for each stage
+  - Clients: Client intake and management
+  - Time: Time tracking with timer functionality
+  - Actions: Task and action item management
+  - Billing: Invoice generation and tracking
+  - Debrief: Standardized debrief templates
+  - Messages: Async communication between stakeholders
+
+### Key Terminology
+- Uses "outcome agnostic" (not "neutral") for facilitator role
+- Roles: admin, government_compliance_officer (admin-provisioned), industry_partner, academia (self-register)
+
+### Contact
+- Phone: +1(908)848-1562
+- Website: www.openstreet.info
 
 ## User Preferences
 

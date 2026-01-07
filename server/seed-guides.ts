@@ -464,6 +464,296 @@ const FORM_TEMPLATES: Record<string, Record<string, { title: string; description
         ]
       }
     }
+  },
+  governance_framework: {
+    initiation: {
+      title: "Governance Charter Form",
+      description: "Establish the governance structure for your program.",
+      schema: {
+        fields: [
+          { id: "governance_model", type: "select", label: "Governance Model", options: ["Hierarchical", "Collaborative", "Federated", "Matrix"], required: true },
+          { id: "decision_authority", type: "textarea", label: "Decision Authority Matrix", required: true, placeholder: "Define who has authority over what decisions..." },
+          { id: "escalation_process", type: "textarea", label: "Escalation Process", required: true, placeholder: "Describe how issues are escalated..." },
+          { id: "compliance_requirements", type: "textarea", label: "Compliance Requirements", required: true, placeholder: "List applicable regulations (FAR, DFARS, etc.)..." },
+          { id: "risk_tolerance", type: "select", label: "Risk Tolerance Level", options: ["Low", "Medium", "High"], required: true },
+          { id: "audit_frequency", type: "select", label: "Audit Frequency", options: ["Monthly", "Quarterly", "Semi-annually", "Annually"] },
+          { id: "governance_lead", type: "text", label: "Governance Lead Name", required: true },
+          { id: "governance_committee", type: "textarea", label: "Governance Committee Members", placeholder: "List committee members and their roles..." }
+        ]
+      }
+    },
+    engagement: {
+      title: "Compliance Monitoring Checklist",
+      description: "Track ongoing compliance and governance activities.",
+      schema: {
+        fields: [
+          { id: "review_date", type: "date", label: "Review Date", required: true },
+          { id: "far_compliance", type: "checkbox", label: "FAR compliance verified" },
+          { id: "dfars_compliance", type: "checkbox", label: "DFARS compliance verified (if applicable)" },
+          { id: "oci_review", type: "checkbox", label: "OCI screening completed" },
+          { id: "small_business_goals", type: "checkbox", label: "Small business participation on track" },
+          { id: "cost_accounting_compliant", type: "checkbox", label: "Cost accounting standards met" },
+          { id: "decisions_documented", type: "checkbox", label: "All governance decisions documented" },
+          { id: "issues_identified", type: "textarea", label: "Issues Identified", placeholder: "Describe any compliance issues..." },
+          { id: "corrective_actions", type: "textarea", label: "Corrective Actions Taken" },
+          { id: "next_review_date", type: "date", label: "Next Review Date" }
+        ]
+      }
+    },
+    synthesis: {
+      title: "Governance Effectiveness Assessment",
+      description: "Evaluate how well governance structures served the program.",
+      schema: {
+        fields: [
+          { id: "decision_timeliness", type: "select", label: "Decision Timeliness", options: ["Excellent", "Good", "Adequate", "Needs Improvement"], required: true },
+          { id: "stakeholder_satisfaction", type: "select", label: "Stakeholder Satisfaction with Governance", options: ["Very Satisfied", "Satisfied", "Neutral", "Dissatisfied"], required: true },
+          { id: "compliance_issues_count", type: "text", label: "Number of Compliance Issues", required: true },
+          { id: "escalations_count", type: "text", label: "Number of Escalations Required" },
+          { id: "process_bottlenecks", type: "textarea", label: "Process Bottlenecks Identified", required: true },
+          { id: "governance_strengths", type: "textarea", label: "Governance Strengths" },
+          { id: "improvement_recommendations", type: "textarea", label: "Improvement Recommendations", required: true },
+          { id: "lessons_learned", type: "textarea", label: "Lessons Learned" }
+        ]
+      }
+    },
+    continuation: {
+      title: "Governance Transition Checklist",
+      description: "Transfer governance responsibilities and documentation.",
+      schema: {
+        fields: [
+          { id: "successor_governance_lead", type: "text", label: "Successor Governance Lead", required: true },
+          { id: "authority_transferred", type: "checkbox", label: "Decision authority formally transferred" },
+          { id: "governance_docs_transferred", type: "checkbox", label: "All governance documentation transferred" },
+          { id: "compliance_records_archived", type: "checkbox", label: "Compliance records properly archived" },
+          { id: "successor_trained", type: "checkbox", label: "Successor trained on governance protocols" },
+          { id: "outstanding_issues_documented", type: "checkbox", label: "Outstanding issues documented and assigned" },
+          { id: "transition_overlap_period", type: "select", label: "Transition Overlap Period", options: ["1 week", "2 weeks", "1 month", "2 months"] },
+          { id: "handoff_notes", type: "textarea", label: "Handoff Notes" }
+        ]
+      }
+    }
+  },
+  facilitation_model: {
+    initiation: {
+      title: "Facilitation Planning Form",
+      description: "Design your outcome agnostic facilitation approach.",
+      schema: {
+        fields: [
+          { id: "facilitation_approach", type: "select", label: "Primary Facilitation Approach", options: ["Structured Dialogue", "Open Forum", "Design Thinking", "Consensus Building", "Hybrid"], required: true },
+          { id: "facilitator_name", type: "text", label: "Lead Facilitator", required: true },
+          { id: "facilitator_credentials", type: "textarea", label: "Facilitator Qualifications", placeholder: "List relevant certifications and experience..." },
+          { id: "session_objectives", type: "textarea", label: "Session Objectives (Process-focused)", required: true, placeholder: "Describe what the facilitation process aims to achieve..." },
+          { id: "stakeholder_groups", type: "textarea", label: "Stakeholder Groups to Engage", required: true },
+          { id: "potential_challenges", type: "textarea", label: "Potential Facilitation Challenges", placeholder: "Identify possible obstacles..." },
+          { id: "mitigation_strategies", type: "textarea", label: "Challenge Mitigation Strategies" },
+          { id: "outcome_agnostic_commitment", type: "checkbox", label: "Facilitator commits to outcome agnostic stance" },
+          { id: "documentation_method", type: "select", label: "Documentation Method", options: ["Real-time notes", "Audio recording", "Video recording", "Combination"], required: true }
+        ]
+      }
+    },
+    engagement: {
+      title: "Session Planning Template",
+      description: "Plan individual facilitated sessions.",
+      schema: {
+        fields: [
+          { id: "session_type", type: "select", label: "Session Type", options: ["Discovery", "Working Session", "Review", "Decision", "Brainstorming", "Validation"], required: true },
+          { id: "session_date", type: "date", label: "Session Date", required: true },
+          { id: "session_duration", type: "select", label: "Session Duration", options: ["1 hour", "2 hours", "Half day", "Full day"], required: true },
+          { id: "attendees", type: "textarea", label: "Expected Attendees", required: true },
+          { id: "agenda", type: "textarea", label: "Session Agenda", required: true, placeholder: "List agenda items with time allocations..." },
+          { id: "materials_needed", type: "textarea", label: "Materials/Tools Needed", placeholder: "Whiteboard, sticky notes, virtual tools, etc." },
+          { id: "ground_rules", type: "textarea", label: "Ground Rules", placeholder: "Respectful dialogue, equal participation, etc." },
+          { id: "expected_outputs", type: "textarea", label: "Expected Session Outputs" },
+          { id: "backup_facilitator", type: "text", label: "Backup Facilitator" }
+        ]
+      }
+    },
+    synthesis: {
+      title: "Session Outcomes Summary",
+      description: "Document outcomes from facilitated sessions.",
+      schema: {
+        fields: [
+          { id: "session_date_completed", type: "date", label: "Session Date", required: true },
+          { id: "attendance_count", type: "text", label: "Number of Attendees", required: true },
+          { id: "key_discussion_points", type: "textarea", label: "Key Discussion Points", required: true },
+          { id: "agreements_reached", type: "textarea", label: "Agreements Reached" },
+          { id: "disagreements_noted", type: "textarea", label: "Areas of Disagreement" },
+          { id: "action_items", type: "textarea", label: "Action Items Generated", required: true, placeholder: "List action items with owners and due dates..." },
+          { id: "parking_lot_items", type: "textarea", label: "Parking Lot Items", placeholder: "Topics to address later..." },
+          { id: "participant_feedback", type: "select", label: "Overall Participant Feedback", options: ["Very Positive", "Positive", "Mixed", "Negative"], required: true },
+          { id: "facilitator_observations", type: "textarea", label: "Facilitator Observations" },
+          { id: "followup_needed", type: "checkbox", label: "Follow-up session needed" }
+        ]
+      }
+    },
+    continuation: {
+      title: "Facilitation Knowledge Transfer",
+      description: "Document facilitation methods and lessons for future use.",
+      schema: {
+        fields: [
+          { id: "effective_techniques", type: "textarea", label: "Most Effective Facilitation Techniques", required: true },
+          { id: "ineffective_approaches", type: "textarea", label: "Approaches That Didn't Work" },
+          { id: "stakeholder_dynamics", type: "textarea", label: "Stakeholder Dynamics Observed", required: true },
+          { id: "cultural_considerations", type: "textarea", label: "Cultural/Organizational Considerations" },
+          { id: "templates_created", type: "textarea", label: "Templates/Tools Created", placeholder: "List reusable facilitation assets..." },
+          { id: "recommended_facilitators", type: "textarea", label: "Recommended Facilitators for Similar Work" },
+          { id: "lessons_learned", type: "textarea", label: "Key Lessons Learned", required: true },
+          { id: "documentation_location", type: "text", label: "Location of Session Documentation" },
+          { id: "knowledge_transfer_complete", type: "checkbox", label: "Knowledge transfer to successor complete" }
+        ]
+      }
+    }
+  },
+  analysis_framework: {
+    initiation: {
+      title: "Analysis Methodology Form",
+      description: "Define your analytical approach and data requirements.",
+      schema: {
+        fields: [
+          { id: "analysis_scope", type: "textarea", label: "Analysis Scope", required: true, placeholder: "Define what will and won't be analyzed..." },
+          { id: "analysis_types", type: "textarea", label: "Types of Analysis to Conduct", required: true, placeholder: "Policy analysis, gap assessment, comparative analysis, etc." },
+          { id: "data_sources", type: "textarea", label: "Data Sources Required", required: true },
+          { id: "data_access_method", type: "select", label: "Data Access Method", options: ["Direct access", "Stakeholder provided", "Public sources", "Combination"], required: true },
+          { id: "data_sensitivity", type: "select", label: "Data Sensitivity Level", options: ["Public", "Controlled Unclassified", "Confidential", "Secret"], required: true },
+          { id: "analysis_lead", type: "text", label: "Analysis Lead", required: true },
+          { id: "analysis_team", type: "textarea", label: "Analysis Team Members" },
+          { id: "methodology_description", type: "textarea", label: "Methodology Description", required: true },
+          { id: "timeline", type: "textarea", label: "Analysis Timeline", required: true },
+          { id: "deliverables", type: "textarea", label: "Expected Deliverables", required: true }
+        ]
+      }
+    },
+    engagement: {
+      title: "Data Collection Tracker",
+      description: "Track data collection and preliminary findings.",
+      schema: {
+        fields: [
+          { id: "collection_date", type: "date", label: "Collection Date", required: true },
+          { id: "data_source", type: "text", label: "Data Source", required: true },
+          { id: "data_type", type: "select", label: "Data Type", options: ["Quantitative", "Qualitative", "Mixed"], required: true },
+          { id: "collection_method", type: "select", label: "Collection Method", options: ["Interview", "Survey", "Document review", "Database query", "Observation"], required: true },
+          { id: "sample_size", type: "text", label: "Sample Size/Volume" },
+          { id: "data_quality", type: "select", label: "Data Quality Assessment", options: ["High", "Medium", "Low"], required: true },
+          { id: "preliminary_findings", type: "textarea", label: "Preliminary Findings", required: true },
+          { id: "gaps_identified", type: "textarea", label: "Data Gaps Identified" },
+          { id: "validation_status", type: "select", label: "Validation Status", options: ["Not started", "In progress", "Validated", "Issues found"], required: true },
+          { id: "notes", type: "textarea", label: "Collection Notes" }
+        ]
+      }
+    },
+    synthesis: {
+      title: "Analysis Findings Report",
+      description: "Document integrated analysis findings and recommendations.",
+      schema: {
+        fields: [
+          { id: "executive_summary", type: "textarea", label: "Executive Summary", required: true },
+          { id: "policy_context_findings", type: "textarea", label: "Policy Context Findings", required: true },
+          { id: "gap_assessment_results", type: "textarea", label: "Gap Assessment Results", required: true },
+          { id: "comparative_analysis", type: "textarea", label: "Comparative Analysis Results" },
+          { id: "impact_assessment", type: "textarea", label: "Impact Assessment" },
+          { id: "key_insights", type: "textarea", label: "Key Insights", required: true },
+          { id: "recommendations", type: "textarea", label: "Recommendations", required: true },
+          { id: "implementation_roadmap", type: "textarea", label: "Implementation Roadmap" },
+          { id: "limitations", type: "textarea", label: "Analysis Limitations" },
+          { id: "confidence_level", type: "select", label: "Overall Confidence Level", options: ["High", "Medium", "Low"], required: true },
+          { id: "stakeholder_review_complete", type: "checkbox", label: "Stakeholder review completed" }
+        ]
+      }
+    },
+    continuation: {
+      title: "Analysis Handoff Package",
+      description: "Prepare analysis products for transfer and continued use.",
+      schema: {
+        fields: [
+          { id: "report_archive_location", type: "text", label: "Report Archive Location", required: true },
+          { id: "data_package_location", type: "text", label: "Data Package Location", required: true },
+          { id: "methodology_documented", type: "checkbox", label: "Methodology fully documented" },
+          { id: "data_dictionary_complete", type: "checkbox", label: "Data dictionary complete" },
+          { id: "update_procedures_defined", type: "checkbox", label: "Update procedures defined" },
+          { id: "refresh_frequency", type: "select", label: "Recommended Refresh Frequency", options: ["Monthly", "Quarterly", "Semi-annually", "Annually", "As needed"] },
+          { id: "successor_trained", type: "checkbox", label: "Successor trained on analysis methods" },
+          { id: "access_credentials_transferred", type: "checkbox", label: "Data access credentials transferred" },
+          { id: "outstanding_analysis", type: "textarea", label: "Outstanding Analysis Work" },
+          { id: "handoff_notes", type: "textarea", label: "Handoff Notes" }
+        ]
+      }
+    }
+  },
+  continuation_strategy: {
+    initiation: {
+      title: "Sustainability Planning Form",
+      description: "Establish framework for sustainable program continuation.",
+      schema: {
+        fields: [
+          { id: "continuation_vision", type: "textarea", label: "Continuation Vision", required: true, placeholder: "Describe the desired future state..." },
+          { id: "sustainability_owner", type: "text", label: "Sustainability Planning Owner", required: true },
+          { id: "key_stakeholders", type: "textarea", label: "Key Stakeholders for Continuation", required: true },
+          { id: "resource_requirements", type: "textarea", label: "Ongoing Resource Requirements", required: true, placeholder: "Funding, personnel, technology, etc." },
+          { id: "funding_sources", type: "textarea", label: "Potential Funding Sources" },
+          { id: "transition_timeline", type: "textarea", label: "Transition Timeline", required: true },
+          { id: "success_metrics", type: "textarea", label: "Long-term Success Metrics", required: true },
+          { id: "risks_to_sustainability", type: "textarea", label: "Risks to Sustainability" },
+          { id: "mitigation_strategies", type: "textarea", label: "Risk Mitigation Strategies" },
+          { id: "governance_model", type: "select", label: "Post-transition Governance Model", options: ["Same organization", "Transfer to government", "Transfer to industry", "Joint ownership", "TBD"], required: true }
+        ]
+      }
+    },
+    engagement: {
+      title: "Capability Building Tracker",
+      description: "Track preparation activities for sustainable continuation.",
+      schema: {
+        fields: [
+          { id: "successor_organization", type: "text", label: "Successor Organization/Individual", required: true },
+          { id: "capability_gaps", type: "textarea", label: "Identified Capability Gaps", required: true },
+          { id: "training_completed", type: "textarea", label: "Training Completed", placeholder: "List training sessions with dates..." },
+          { id: "training_remaining", type: "textarea", label: "Training Remaining" },
+          { id: "relationship_building", type: "textarea", label: "Relationship Building Activities" },
+          { id: "resource_commitments", type: "textarea", label: "Resource Commitments Secured" },
+          { id: "documentation_progress", type: "select", label: "Documentation Progress", options: ["Not started", "25%", "50%", "75%", "Complete"], required: true },
+          { id: "champion_identified", type: "checkbox", label: "Continuation champion identified" },
+          { id: "commitment_letters", type: "checkbox", label: "Commitment letters obtained" },
+          { id: "notes", type: "textarea", label: "Progress Notes" }
+        ]
+      }
+    },
+    synthesis: {
+      title: "Continuation Readiness Assessment",
+      description: "Evaluate readiness for sustainable program continuation.",
+      schema: {
+        fields: [
+          { id: "leadership_readiness", type: "select", label: "Leadership Continuity Readiness", options: ["Ready", "Mostly ready", "Gaps exist", "Not ready"], required: true },
+          { id: "resource_readiness", type: "select", label: "Resource Availability", options: ["Fully secured", "Mostly secured", "Partially secured", "Not secured"], required: true },
+          { id: "knowledge_transfer_status", type: "select", label: "Knowledge Transfer Status", options: ["Complete", "In progress", "Not started"], required: true },
+          { id: "stakeholder_commitment", type: "select", label: "Stakeholder Commitment Level", options: ["Strong", "Moderate", "Weak", "Unknown"], required: true },
+          { id: "identified_gaps", type: "textarea", label: "Identified Continuation Gaps", required: true },
+          { id: "remediation_plans", type: "textarea", label: "Gap Remediation Plans", required: true },
+          { id: "remediation_timeline", type: "textarea", label: "Remediation Timeline" },
+          { id: "go_nogo_recommendation", type: "select", label: "Go/No-Go Recommendation", options: ["Go - proceed with transition", "Conditional - address gaps first", "No-Go - significant gaps remain"], required: true },
+          { id: "risk_assessment", type: "textarea", label: "Risk Assessment" },
+          { id: "contingency_plans", type: "textarea", label: "Contingency Plans" }
+        ]
+      }
+    },
+    continuation: {
+      title: "Transition Execution Checklist",
+      description: "Execute transition plan and confirm sustainability.",
+      schema: {
+        fields: [
+          { id: "transition_date", type: "date", label: "Transition Date", required: true },
+          { id: "formal_handoff_complete", type: "checkbox", label: "Formal handoff ceremony completed" },
+          { id: "responsibilities_transferred", type: "checkbox", label: "All responsibilities transferred" },
+          { id: "knowledge_sessions_complete", type: "checkbox", label: "Knowledge transfer sessions complete" },
+          { id: "documentation_delivered", type: "checkbox", label: "All documentation delivered" },
+          { id: "access_transferred", type: "checkbox", label: "System access transferred" },
+          { id: "contacts_introduced", type: "checkbox", label: "Key contacts introduced" },
+          { id: "monitoring_established", type: "checkbox", label: "Post-transition monitoring established" },
+          { id: "followup_schedule", type: "textarea", label: "Follow-up Schedule", required: true },
+          { id: "lessons_learned", type: "textarea", label: "Lessons Learned", required: true },
+          { id: "final_notes", type: "textarea", label: "Final Transition Notes" },
+          { id: "transition_success", type: "select", label: "Transition Success Rating", options: ["Excellent", "Good", "Adequate", "Needs improvement"], required: true }
+        ]
+      }
+    }
   }
 };
 

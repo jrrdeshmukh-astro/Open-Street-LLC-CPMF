@@ -268,6 +268,24 @@ export const messages = pgTable("messages", {
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [index("idx_messages_client").on(table.clientId)]);
 
+// Collaborations - links industry partners and academia for shared workflows
+export const collaborations = pgTable("collaborations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull(),
+  ownerId: varchar("owner_id").notNull(), // User who created the collaboration
+  collaboratorId: varchar("collaborator_id").notNull(), // Invited user
+  collaboratorEmail: varchar("collaborator_email"), // For pending invites
+  role: varchar("role").default("collaborator"), // owner, collaborator
+  status: varchar("status").default("pending"), // pending, accepted, declined
+  invitedAt: timestamp("invited_at").defaultNow(),
+  acceptedAt: timestamp("accepted_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_collaborations_client").on(table.clientId),
+  index("idx_collaborations_collaborator").on(table.collaboratorId),
+]);
+
 // Insert schemas
 export const insertWorkflowProgressSchema = createInsertSchema(workflowProgress).omit({
   id: true,
@@ -328,6 +346,12 @@ export const insertMessageSchema = createInsertSchema(messages).omit({
   updatedAt: true,
 });
 
+export const insertCollaborationSchema = createInsertSchema(collaborations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertGuideSchema = createInsertSchema(guides).omit({
   id: true,
   createdAt: true,
@@ -367,6 +391,8 @@ export type DebriefRecord = typeof debriefRecords.$inferSelect;
 export type InsertDebriefRecord = z.infer<typeof insertDebriefRecordSchema>;
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
+export type Collaboration = typeof collaborations.$inferSelect;
+export type InsertCollaboration = z.infer<typeof insertCollaborationSchema>;
 export type Guide = typeof guides.$inferSelect;
 export type InsertGuide = z.infer<typeof insertGuideSchema>;
 export type FormTemplate = typeof formTemplates.$inferSelect;

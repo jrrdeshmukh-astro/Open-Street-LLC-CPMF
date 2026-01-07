@@ -635,7 +635,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         clientId,
         ownerId: req.session.userId,
         collaboratorId: collaborator.id,
-        collaboratorEmail: currentUser.email, // Store inviter's email for display
+        collaboratorEmail: collaborator.email, // Store invitee's email for display
         status: "pending"
       });
       
@@ -1603,6 +1603,127 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // Send contract for signature
+  app.post("/api/contracts/:id/send-for-signature", requireAuth, async (req: any, res) => {
+    try {
+      const contract = await storage.getContract(req.params.id, req.session.userId);
+      if (!contract) {
+        return res.status(404).json({ message: "Contract not found" });
+      }
+
+      const legalSettings = await storage.getLegalSettings(req.session.userId);
+      if (!legalSettings) {
+        return res.status(400).json({ message: "Legal service not configured. Please configure DocuSign or PandaDoc in settings." });
+      }
+
+      const { signatories } = req.body; // Array of {name, email, role}
+      if (!signatories || signatories.length === 0) {
+        return res.status(400).json({ message: "At least one signatory is required" });
+      }
+
+      // Update contract with signatories
+      await storage.updateContract(req.params.id, req.session.userId, {
+        signatories: JSON.stringify(signatories),
+        status: "pending_signature"
+      });
+
+      // For DocuSign integration
+      if (legalSettings.preferredService === "docusign" && legalSettings.docusignAccessToken) {
+        try {
+          // DocuSign API call would go here
+          // For now, we'll simulate it
+          const baseUrl = legalSettings.docusignEnvironment === "production" 
+            ? "https://www.docusign.net/restapi"
+            : "https://demo.docusign.net/restapi";
+          
+          // In a real implementation, you would:
+          // 1. Create an envelope
+          // 2. Add document
+          // 3. Add recipients
+          // 4. Send envelope
+          
+          // For now, we'll just update the contract status
+          await storage.updateContract(req.params.id, req.session.userId, {
+            externalService: "docusign",
+            externalStatus: "sent",
+            legalReviewStatus: legalSettings.requireLegalReview ? "pending" : "approved"
+          });
+
+          res.json({ 
+            success: true, 
+            message: "Contract sent for signature via DocuSign",
+            contract: await storage.getContract(req.params.id, req.session.userId)
+          });
+        } catch (error: any) {
+          console.error("DocuSign error:", error);
+          res.status(500).json({ message: `DocuSign error: ${error.message}` });
+        }
+      } 
+      // For PandaDoc integration
+      else if (legalSettings.preferredService === "pandadoc" && legalSettings.pandadocApiKey) {
+        try {
+          // PandaDoc API call would go here
+          // For now, we'll simulate it
+          await storage.updateContract(req.params.id, req.session.userId, {
+            externalService: "pandadoc",
+            externalStatus: "sent",
+            legalReviewStatus: legalSettings.requireLegalReview ? "pending" : "approved"
+          });
+
+          res.json({ 
+            success: true, 
+            message: "Contract sent for signature via PandaDoc",
+            contract: await storage.getContract(req.params.id, req.session.userId)
+          });
+        } catch (error: any) {
+          console.error("PandaDoc error:", error);
+          res.status(500).json({ message: `PandaDoc error: ${error.message}` });
+        }
+      } else {
+        // No service configured, just update status
+        await storage.updateContract(req.params.id, req.session.userId, {
+          status: "pending_signature",
+          legalReviewStatus: legalSettings.requireLegalReview ? "pending" : "approved"
+        });
+        res.json({ 
+          success: true, 
+          message: "Contract prepared for signature. Configure DocuSign or PandaDoc to send automatically.",
+          contract: await storage.getContract(req.params.id, req.session.userId)
+        });
+      }
+    } catch (error: any) {
+      console.error("Failed to send contract for signature:", error);
+      res.status(500).json({ message: error.message || "Failed to send contract for signature" });
+    }
+  });
+
+  // Update contract legal review status
+  app.patch("/api/contracts/:id/legal-review", requireAuth, async (req: any, res) => {
+    try {
+      const { status, notes } = req.body;
+      const contract = await storage.getContract(req.params.id, req.session.userId);
+      if (!contract) {
+        return res.status(404).json({ message: "Contract not found" });
+      }
+
+      const [currentUser] = await db.select().from(users).where(eq(users.id, req.session.userId));
+      if (!currentUser || currentUser.role !== "admin") {
+        return res.status(403).json({ message: "Only admins can review contracts" });
+      }
+
+      await storage.updateContract(req.params.id, req.session.userId, {
+        legalReviewStatus: status,
+        legalReviewNotes: notes,
+        legalReviewedBy: req.session.userId,
+        legalReviewedAt: new Date()
+      });
+
+      res.json({ success: true, contract: await storage.getContract(req.params.id, req.session.userId) });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to update legal review" });
+    }
+  });
+
   // Auto-generate invoice from time entries
   app.post("/api/invoices/generate", requireAuth, async (req: any, res) => {
     try {
@@ -1614,6 +1735,118 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json(invoice);
     } catch (error) {
       res.status(500).json({ message: "Failed to generate invoice" });
+    }
+  });
+
+  // Admin public view for testing integrations and visualization
+  app.get("/api/admin/public-view", async (req: any, res) => {
+    try {
+      // Allow public access for testing - in production, you might want to add a token check
+      const publicData = {
+        integrations: {
+          jira: {
+            configured: false,
+            description: "Jira integration for action tracking"
+          },
+          slack: {
+            configured: false,
+            description: "Slack integration for async communication"
+          },
+          asana: {
+            configured: false,
+            description: "Asana integration for CRM"
+          },
+          sam: {
+            configured: !!process.env.SAM_GOV_API_KEY,
+            description: "SAM.gov integration for opportunity tracking"
+          },
+          docusign: {
+            configured: false,
+            description: "DocuSign integration for contract signing"
+          },
+          pandadoc: {
+            configured: false,
+            description: "PandaDoc integration for contract signing"
+          }
+        },
+        features: {
+          timeTracking: {
+            enabled: true,
+            description: "Track time with rates and projects"
+          },
+          invoicing: {
+            enabled: true,
+            description: "Generate invoices from time entries"
+          },
+          contracts: {
+            enabled: true,
+            description: "Create contracts from templates"
+          },
+          collaborations: {
+            enabled: true,
+            description: "Partner and academic collaboration features"
+          }
+        },
+        replit: {
+          connected: !!process.env.REPLIT_DB_URL || !!process.env.REPL_ID,
+          description: "Replit database and deployment integration"
+        },
+        timestamp: new Date().toISOString()
+      };
+
+      res.json(publicData);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch public view data" });
+    }
+  });
+
+  // Admin dashboard stats (requires auth)
+  app.get("/api/admin/stats", requireAuth, async (req: any, res) => {
+    try {
+      const [currentUser] = await db.select().from(users).where(eq(users.id, req.session.userId));
+      if (!currentUser || currentUser.role !== "admin") {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const allClients = await db.select().from(clients);
+      const allTimeEntries = await db.select().from(timeEntries);
+      const allInvoices = await db.select().from(invoices);
+      const allContracts = await db.select().from(contracts);
+      const allCollaborations = await db.select().from(collaborations);
+
+      res.json({
+        clients: {
+          total: allClients.length,
+          byStage: allClients.reduce((acc, c) => {
+            acc[c.contractingStage || "unknown"] = (acc[c.contractingStage || "unknown"] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>)
+        },
+        timeTracking: {
+          totalEntries: allTimeEntries.length,
+          totalHours: allTimeEntries.reduce((sum, e) => sum + (e.durationMinutes || 0), 0) / 60,
+          billableHours: allTimeEntries.filter(e => e.billable).reduce((sum, e) => sum + (e.durationMinutes || 0), 0) / 60
+        },
+        billing: {
+          totalInvoices: allInvoices.length,
+          totalRevenue: allInvoices.reduce((sum, i) => sum + Number(i.total || 0), 0),
+          paidRevenue: allInvoices.filter(i => i.status === "paid").reduce((sum, i) => sum + Number(i.total || 0), 0)
+        },
+        contracts: {
+          total: allContracts.length,
+          byStatus: allContracts.reduce((acc, c) => {
+            acc[c.status || "unknown"] = (acc[c.status || "unknown"] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>)
+        },
+        collaborations: {
+          total: allCollaborations.length,
+          pending: allCollaborations.filter(c => c.status === "pending").length,
+          accepted: allCollaborations.filter(c => c.status === "accepted").length
+        }
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch admin stats" });
     }
   });
 

@@ -109,6 +109,7 @@ export default function Dashboard() {
   const { data: taskCodes = [] } = useQuery<TaskCode[]>({ queryKey: ["/api/task-codes"], enabled: !!user });
   const { data: contracts = [] } = useQuery<Contract[]>({ queryKey: ["/api/contracts"], enabled: !!user });
   const { data: contractTemplates = [] } = useQuery<ContractTemplate[]>({ queryKey: ["/api/contract-templates"], enabled: !!user });
+  const { data: legalSettings } = useQuery<any>({ queryKey: ["/api/legal/settings"], enabled: !!user });
   const [selectedGuide, setSelectedGuide] = useState<Guide | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
   const [selectedClientForCollab, setSelectedClientForCollab] = useState<string | null>(null);
@@ -153,6 +154,10 @@ export default function Dashboard() {
   const [selectedBillingRateForTimer, setSelectedBillingRateForTimer] = useState<string | null>(null);
   const [selectedClientForInvoice, setSelectedClientForInvoice] = useState<string | null>(null);
   const [selectedTemplateForContract, setSelectedTemplateForContract] = useState<string | null>(null);
+  const [legalSettingsOpen, setLegalSettingsOpen] = useState(false);
+  const [selectedContractForSigning, setSelectedContractForSigning] = useState<string | null>(null);
+  const [signContractDialogOpen, setSignContractDialogOpen] = useState(false);
+  const [signatories, setSignatories] = useState<Array<{name: string; email: string; role: string}>>([{name: "", email: "", role: "signer"}]);
 
   // Jira queries
   const { data: jiraSettings } = useQuery<any>({ queryKey: ["/api/jira/settings"], enabled: !!user });
@@ -533,6 +538,39 @@ export default function Dashboard() {
       setSelectedClientForInvoice(null);
     },
     onError: () => toast({ title: "Failed to generate invoice", variant: "destructive" }),
+  });
+
+  const saveLegalSettingsMutation = useMutation({
+    mutationFn: async (data: { preferredService?: string; docusignAccountId?: string; docusignAccessToken?: string; docusignEnvironment?: string; pandadocApiKey?: string; defaultReviewerEmail?: string; requireLegalReview?: boolean }) => {
+      const res = await fetch("/api/legal/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data), credentials: "include" });
+      if (!res.ok) throw new Error("Failed to save legal settings");
+      return res.json();
+    },
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ["/api/legal/settings"] }); 
+      toast({ title: "Legal settings saved" }); 
+      setLegalSettingsOpen(false);
+    },
+    onError: () => toast({ title: "Failed to save legal settings", variant: "destructive" }),
+  });
+
+  const sendContractForSignatureMutation = useMutation({
+    mutationFn: async ({ contractId, signatories }: { contractId: string; signatories: Array<{name: string; email: string; role: string}> }) => {
+      const res = await fetch(`/api/contracts/${contractId}/send-for-signature`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ signatories }), credentials: "include" });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to send contract for signature");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => { 
+      queryClient.invalidateQueries({ queryKey: ["/api/contracts"] }); 
+      toast({ title: "Contract sent for signature", description: data.message }); 
+      setSignContractDialogOpen(false);
+      setSelectedContractForSigning(null);
+      setSignatories([{name: "", email: "", role: "signer"}]);
+    },
+    onError: (error: Error) => toast({ title: "Failed to send contract", description: error.message, variant: "destructive" }),
   });
 
   const handleStartForm = (template: FormTemplate) => {
@@ -1666,8 +1704,12 @@ export default function Dashboard() {
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-2">
                     <CardTitle className="font-serif text-base">Contracts</CardTitle>
-                    <Dialog open={contractDialogOpen} onOpenChange={(open) => { setContractDialogOpen(open); if (!open) setSelectedTemplateForContract(null); }}>
-                      <DialogTrigger asChild><Button size="sm" variant="outline" data-testid="button-add-contract"><Plus className="w-4 h-4 mr-1" />Add</Button></DialogTrigger>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="ghost" onClick={() => setLegalSettingsOpen(true)} data-testid="button-legal-settings">
+                        <FileCheck className="w-4 h-4 mr-1" />Legal Settings
+                      </Button>
+                      <Dialog open={contractDialogOpen} onOpenChange={(open) => { setContractDialogOpen(open); if (!open) setSelectedTemplateForContract(null); }}>
+                        <DialogTrigger asChild><Button size="sm" variant="outline" data-testid="button-add-contract"><Plus className="w-4 h-4 mr-1" />Add</Button></DialogTrigger>
                       <DialogContent>
                         <DialogHeader><DialogTitle>{selectedTemplateForContract ? "Create Contract from Template" : "Create Contract"}</DialogTitle><DialogDescription>Create a new contract for a client</DialogDescription></DialogHeader>
                         <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); if (selectedTemplateForContract) { createContractFromTemplateMutation.mutate({ templateId: selectedTemplateForContract, clientId: fd.get("clientId") as string }); } else { createContractMutation.mutate({ clientId: fd.get("clientId") as string, contractType: fd.get("contractType") as string, title: fd.get("title") as string, content: fd.get("content") as string, status: "draft" }); } }} className="space-y-4">
@@ -1714,13 +1756,23 @@ export default function Dashboard() {
                             const contractClient = clients.find(c => c.id === contract.clientId);
                             return (
                               <div key={contract.id} className="p-2 bg-slate-50 rounded flex items-center justify-between" data-testid={`contract-${contract.id}`}>
-                                <div>
+                                <div className="flex-1">
                                   <p className="text-sm font-medium">{contract.title}</p>
                                   <p className="text-xs text-muted-foreground">{contractClient?.name} • {CONTRACT_TYPES.find(ct => ct.value === contract.contractType)?.label}</p>
+                                  {contract.externalService && (
+                                    <p className="text-xs text-blue-600 mt-1">Via {contract.externalService === "docusign" ? "DocuSign" : contract.externalService === "pandadoc" ? "PandaDoc" : contract.externalService}</p>
+                                  )}
                                 </div>
-                                <Badge variant={contract.status === "signed" ? "default" : contract.status === "pending_signature" ? "secondary" : "outline"} data-testid={`contract-status-${contract.id}`}>
-                                  {contract.status === "draft" ? "Draft" : contract.status === "pending_signature" ? "Pending" : contract.status === "signed" ? "Signed" : contract.status}
-                                </Badge>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant={contract.status === "signed" ? "default" : contract.status === "pending_signature" ? "secondary" : "outline"} data-testid={`contract-status-${contract.id}`}>
+                                    {contract.status === "draft" ? "Draft" : contract.status === "pending_signature" ? "Pending" : contract.status === "signed" ? "Signed" : contract.status}
+                                  </Badge>
+                                  {contract.status === "draft" && (
+                                    <Button size="sm" variant="ghost" onClick={() => { setSelectedContractForSigning(contract.id); setSignContractDialogOpen(true); }} data-testid={`button-send-contract-${contract.id}`}>
+                                      <FileCheck className="w-3 h-3" />
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
                             );
                           })}
@@ -1731,6 +1783,154 @@ export default function Dashboard() {
                 </Card>
               </div>
             </div>
+
+            {/* Legal Settings Dialog */}
+            <Dialog open={legalSettingsOpen} onOpenChange={setLegalSettingsOpen}>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Legal Services Integration</DialogTitle>
+                  <DialogDescription>Configure DocuSign or PandaDoc for contract signing</DialogDescription>
+                </DialogHeader>
+                <form onSubmit={(e) => { 
+                  e.preventDefault(); 
+                  const fd = new FormData(e.currentTarget);
+                  saveLegalSettingsMutation.mutate({
+                    preferredService: fd.get("preferredService") as string,
+                    docusignAccountId: fd.get("docusignAccountId") as string,
+                    docusignAccessToken: fd.get("docusignAccessToken") as string,
+                    docusignEnvironment: fd.get("docusignEnvironment") as string || "demo",
+                    pandadocApiKey: fd.get("pandadocApiKey") as string,
+                    defaultReviewerEmail: fd.get("defaultReviewerEmail") as string,
+                    requireLegalReview: fd.get("requireLegalReview") === "on"
+                  });
+                }} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Preferred Service</Label>
+                    <Select name="preferredService" defaultValue={legalSettings?.preferredService || "docusign"}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="docusign">DocuSign</SelectItem>
+                        <SelectItem value="pandadoc">PandaDoc</SelectItem>
+                        <SelectItem value="hellosign">HelloSign</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-4 p-4 border rounded-lg">
+                    <h4 className="font-medium">DocuSign Settings</h4>
+                    <div className="space-y-2">
+                      <Label>Account ID</Label>
+                      <Input name="docusignAccountId" placeholder="DocuSign Account ID" defaultValue={legalSettings?.docusignAccountId || ""} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Access Token</Label>
+                      <Input name="docusignAccessToken" type="password" placeholder="DocuSign Access Token" defaultValue={legalSettings?.hasDocusignToken ? "••••••••" : ""} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Environment</Label>
+                      <Select name="docusignEnvironment" defaultValue={legalSettings?.docusignEnvironment || "demo"}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="demo">Demo/Sandbox</SelectItem>
+                          <SelectItem value="production">Production</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 p-4 border rounded-lg">
+                    <h4 className="font-medium">PandaDoc Settings</h4>
+                    <div className="space-y-2">
+                      <Label>API Key</Label>
+                      <Input name="pandadocApiKey" type="password" placeholder="PandaDoc API Key" defaultValue={legalSettings?.hasPandadocKey ? "••••••••" : ""} />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Default Legal Reviewer Email</Label>
+                    <Input name="defaultReviewerEmail" type="email" placeholder="reviewer@example.com" defaultValue={legalSettings?.defaultReviewerEmail || ""} />
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Checkbox id="requireLegalReview" name="requireLegalReview" defaultChecked={legalSettings?.requireLegalReview !== false} />
+                    <Label htmlFor="requireLegalReview" className="cursor-pointer">Require legal review before sending</Label>
+                  </div>
+
+                  <Button type="submit" className="w-full" disabled={saveLegalSettingsMutation.isPending}>
+                    {saveLegalSettingsMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                    Save Settings
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+
+            {/* Send Contract for Signature Dialog */}
+            <Dialog open={signContractDialogOpen} onOpenChange={setSignContractDialogOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Send Contract for Signature</DialogTitle>
+                  <DialogDescription>Configure signatories and send via your legal service</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  {!legalSettings?.hasDocusignToken && !legalSettings?.hasPandadocKey && (
+                    <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <p className="text-sm text-yellow-800">No legal service configured. Configure DocuSign or PandaDoc in Legal Settings first.</p>
+                    </div>
+                  )}
+                  
+                  <div className="space-y-2">
+                    <Label>Signatories</Label>
+                    {signatories.map((sig, idx) => (
+                      <div key={idx} className="flex gap-2">
+                        <Input placeholder="Name" value={sig.name} onChange={(e) => {
+                          const newSigs = [...signatories];
+                          newSigs[idx].name = e.target.value;
+                          setSignatories(newSigs);
+                        }} />
+                        <Input placeholder="Email" type="email" value={sig.email} onChange={(e) => {
+                          const newSigs = [...signatories];
+                          newSigs[idx].email = e.target.value;
+                          setSignatories(newSigs);
+                        }} />
+                        <Select value={sig.role} onValueChange={(value) => {
+                          const newSigs = [...signatories];
+                          newSigs[idx].role = value;
+                          setSignatories(newSigs);
+                        }}>
+                          <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="signer">Signer</SelectItem>
+                            <SelectItem value="cc">CC</SelectItem>
+                            <SelectItem value="reviewer">Reviewer</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {signatories.length > 1 && (
+                          <Button type="button" variant="ghost" size="sm" onClick={() => setSignatories(signatories.filter((_, i) => i !== idx))}>
+                            <X className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                    <Button type="button" variant="outline" size="sm" onClick={() => setSignatories([...signatories, {name: "", email: "", role: "signer"}])}>
+                      <Plus className="w-4 h-4 mr-1" />Add Signatory
+                    </Button>
+                  </div>
+
+                  <Button 
+                    onClick={() => {
+                      if (selectedContractForSigning) {
+                        sendContractForSignatureMutation.mutate({ contractId: selectedContractForSigning, signatories });
+                      }
+                    }} 
+                    className="w-full" 
+                    disabled={!selectedContractForSigning || sendContractForSignatureMutation.isPending || signatories.some(s => !s.name || !s.email)}
+                  >
+                    {sendContractForSignatureMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                    Send for Signature
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </TabsContent>
 
           {/* Debrief Tab */}

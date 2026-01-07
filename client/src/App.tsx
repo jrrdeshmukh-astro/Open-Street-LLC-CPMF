@@ -8,6 +8,7 @@ import Brochure from "@/pages/Brochure";
 import Dashboard from "@/pages/Dashboard";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
+import AdminView from "@/pages/AdminView";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -18,6 +19,7 @@ function Router() {
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
+      <Route path="/admin/public-view" component={AdminView} />
       <Route component={NotFound} />
     </Switch>
   );

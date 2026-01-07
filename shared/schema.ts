@@ -279,14 +279,55 @@ export const workflowInstances = pgTable("workflow_instances", {
 export const messages = pgTable("messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull(),
+  recipientId: varchar("recipient_id"), // Target user for the message
   clientId: varchar("client_id"),
   parentId: varchar("parent_id"), // for threaded replies
   subject: varchar("subject"),
   content: text("content").notNull(),
+  // Delivery tracking
+  sentAt: timestamp("sent_at").defaultNow(),
+  deliveredAt: timestamp("delivered_at"),
   readAt: timestamp("read_at"),
+  deliveryStatus: varchar("delivery_status").default("sent"), // sent, delivered, read, failed
+  // Slack integration
+  slackChannelId: varchar("slack_channel_id"),
+  slackMessageTs: varchar("slack_message_ts"), // Slack message timestamp ID
+  slackSyncedAt: timestamp("slack_synced_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [index("idx_messages_client").on(table.clientId)]);
+
+// Slack settings for user's Slack connection
+export const slackSettings = pgTable("slack_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().unique(),
+  workspaceName: varchar("workspace_name"),
+  webhookUrl: varchar("webhook_url"), // Incoming webhook for sending messages
+  botToken: varchar("bot_token"), // Bot OAuth token for full API access
+  defaultChannelId: varchar("default_channel_id"),
+  defaultChannelName: varchar("default_channel_name"),
+  syncEnabled: boolean("sync_enabled").default(true),
+  notifyOnNewMessage: boolean("notify_on_new_message").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Session activity log for logout summary
+export const sessionActivities = pgTable("session_activities", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  sessionId: varchar("session_id").notNull(),
+  activityType: varchar("activity_type").notNull(), // login, logout, create, update, delete, view
+  entityType: varchar("entity_type"), // client, action, message, form, etc.
+  entityId: varchar("entity_id"),
+  entityName: varchar("entity_name"), // Human-readable name for the entity
+  description: text("description"), // Human-readable description of the action
+  metadata: text("metadata"), // JSON with additional context
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_session_activities_user").on(table.userId),
+  index("idx_session_activities_session").on(table.sessionId),
+]);
 
 // Collaborations - links industry partners and academia for shared workflows
 export const collaborations = pgTable("collaborations", {
@@ -396,6 +437,17 @@ export const insertJiraSettingsSchema = createInsertSchema(jiraSettings).omit({
   updatedAt: true,
 });
 
+export const insertSlackSettingsSchema = createInsertSchema(slackSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertSessionActivitySchema = createInsertSchema(sessionActivities).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type WorkflowProgress = typeof workflowProgress.$inferSelect;
 export type InsertWorkflowProgress = z.infer<typeof insertWorkflowProgressSchema>;
@@ -427,6 +479,10 @@ export type FormSubmission = typeof formSubmissions.$inferSelect;
 export type InsertFormSubmission = z.infer<typeof insertFormSubmissionSchema>;
 export type JiraSettings = typeof jiraSettings.$inferSelect;
 export type InsertJiraSettings = z.infer<typeof insertJiraSettingsSchema>;
+export type SlackSettings = typeof slackSettings.$inferSelect;
+export type InsertSlackSettings = z.infer<typeof insertSlackSettingsSchema>;
+export type SessionActivity = typeof sessionActivities.$inferSelect;
+export type InsertSessionActivity = z.infer<typeof insertSessionActivitySchema>;
 
 // Opportunity schemas
 export const insertOpportunitySchema = createInsertSchema(opportunities).omit({

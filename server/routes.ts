@@ -6,8 +6,10 @@ import {
   insertWorkflowProgressSchema, insertArtifactSchema, insertClientSchema,
   insertTimeEntrySchema, insertActionSchema, insertInvoiceSchema, insertInvoiceItemSchema,
   insertDebriefTemplateSchema, insertDebriefRecordSchema, insertMessageSchema,
-  insertGuideSchema, insertFormTemplateSchema, insertFormSubmissionSchema
+  insertGuideSchema, insertFormTemplateSchema, insertFormSubmissionSchema,
+  insertOpportunitySchema, insertWorkflowInstanceSchema
 } from "@shared/schema";
+import { searchSamOpportunities, NOTICE_TYPES, SET_ASIDE_TYPES } from "./sam-api";
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   // Workflow Progress
@@ -421,6 +423,138 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       res.json(submission);
     } catch (error) {
       res.status(500).json({ message: "Failed to submit form" });
+    }
+  });
+
+  // SAM.gov Integration
+  app.get("/api/sam/search", requireAuth, async (req: any, res) => {
+    try {
+      const apiKey = process.env.SAM_GOV_API_KEY;
+      if (!apiKey) {
+        return res.status(400).json({ 
+          message: "SAM.gov API key not configured",
+          needsApiKey: true 
+        });
+      }
+      
+      const { keyword, naicsCode, agency, noticeType, setAsideType, postedFrom, postedTo, limit, offset } = req.query;
+      const result = await searchSamOpportunities(apiKey, {
+        keyword: keyword as string,
+        naicsCode: naicsCode as string,
+        agency: agency as string,
+        noticeType: noticeType as string,
+        setAsideType: setAsideType as string,
+        postedFrom: postedFrom as string,
+        postedTo: postedTo as string,
+        limit: limit ? parseInt(limit as string) : 25,
+        offset: offset ? parseInt(offset as string) : 0,
+      });
+      
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to search SAM.gov" });
+    }
+  });
+
+  app.get("/api/sam/reference-data", async (_req, res) => {
+    res.json({
+      noticeTypes: NOTICE_TYPES,
+      setAsideTypes: SET_ASIDE_TYPES,
+    });
+  });
+
+  // Saved Opportunities
+  app.get("/api/opportunities", requireAuth, async (_req: any, res) => {
+    try {
+      const opportunities = await storage.getOpportunities();
+      res.json(opportunities);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch opportunities" });
+    }
+  });
+
+  app.get("/api/opportunities/:id", requireAuth, async (req: any, res) => {
+    try {
+      const opportunity = await storage.getOpportunity(req.params.id);
+      res.json(opportunity);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch opportunity" });
+    }
+  });
+
+  app.post("/api/opportunities", requireAuth, async (req: any, res) => {
+    try {
+      const data = insertOpportunitySchema.parse(req.body);
+      const opportunity = await storage.upsertOpportunity(data);
+      res.json(opportunity);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to save opportunity" });
+    }
+  });
+
+  app.delete("/api/opportunities/:id", requireAuth, async (req: any, res) => {
+    try {
+      await storage.deleteOpportunity(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete opportunity" });
+    }
+  });
+
+  // Workflow Templates
+  app.get("/api/workflow-templates", requireAuth, async (_req: any, res) => {
+    try {
+      const templates = await storage.getWorkflowTemplates();
+      res.json(templates);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch workflow templates" });
+    }
+  });
+
+  // Workflow Instances
+  app.get("/api/workflow-instances", requireAuth, async (req: any, res) => {
+    try {
+      const instances = await storage.getWorkflowInstances(req.session.userId);
+      res.json(instances);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch workflow instances" });
+    }
+  });
+
+  app.get("/api/workflow-instances/:id", requireAuth, async (req: any, res) => {
+    try {
+      const instance = await storage.getWorkflowInstance(req.params.id, req.session.userId);
+      res.json(instance);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch workflow instance" });
+    }
+  });
+
+  app.post("/api/workflow-instances", requireAuth, async (req: any, res) => {
+    try {
+      const data = insertWorkflowInstanceSchema.parse({ ...req.body, userId: req.session.userId });
+      const instance = await storage.createWorkflowInstance(data);
+      res.json(instance);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create workflow instance" });
+    }
+  });
+
+  app.patch("/api/workflow-instances/:id", requireAuth, async (req: any, res) => {
+    try {
+      const instance = await storage.updateWorkflowInstance(req.params.id, req.session.userId, req.body);
+      res.json(instance);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update workflow instance" });
+    }
+  });
+
+  app.delete("/api/workflow-instances/:id", requireAuth, async (req: any, res) => {
+    try {
+      await storage.deleteWorkflowInstance(req.params.id, req.session.userId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete workflow instance" });
     }
   });
 

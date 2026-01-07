@@ -1,6 +1,6 @@
 import { 
   workflowProgress, artifacts, clients, timeEntries, actions, invoices, invoiceItems, debriefTemplates, debriefRecords, messages,
-  guides, formTemplates, formSubmissions,
+  guides, formTemplates, formSubmissions, opportunities, workflowTemplates, workflowInstances,
   type WorkflowProgress, type InsertWorkflowProgress,
   type Artifact, type InsertArtifact,
   type Client, type InsertClient,
@@ -13,7 +13,10 @@ import {
   type Message, type InsertMessage,
   type Guide, type InsertGuide,
   type FormTemplate, type InsertFormTemplate,
-  type FormSubmission, type InsertFormSubmission
+  type FormSubmission, type InsertFormSubmission,
+  type Opportunity, type InsertOpportunity,
+  type WorkflowTemplate, type InsertWorkflowTemplate,
+  type WorkflowInstance, type InsertWorkflowInstance
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc } from "drizzle-orm";
@@ -322,6 +325,90 @@ export class DatabaseStorage {
       .set({ status: "submitted", submittedAt: new Date(), updatedAt: new Date() })
       .where(and(eq(formSubmissions.id, id), eq(formSubmissions.userId, userId))).returning();
     return updated;
+  }
+
+  // Opportunities
+  async getOpportunities(): Promise<Opportunity[]> {
+    return await db.select().from(opportunities).orderBy(desc(opportunities.responseDeadline));
+  }
+
+  async getOpportunity(id: string): Promise<Opportunity | undefined> {
+    const [opp] = await db.select().from(opportunities).where(eq(opportunities.id, id));
+    return opp;
+  }
+
+  async getOpportunityByExternalId(externalId: string): Promise<Opportunity | undefined> {
+    const [opp] = await db.select().from(opportunities).where(eq(opportunities.externalId, externalId));
+    return opp;
+  }
+
+  async createOpportunity(opportunity: InsertOpportunity): Promise<Opportunity> {
+    const [created] = await db.insert(opportunities).values(opportunity).returning();
+    return created;
+  }
+
+  async upsertOpportunity(opportunity: InsertOpportunity): Promise<Opportunity> {
+    const existing = await this.getOpportunityByExternalId(opportunity.externalId);
+    if (existing) {
+      const [updated] = await db.update(opportunities)
+        .set({ ...opportunity, updatedAt: new Date(), syncedAt: new Date() })
+        .where(eq(opportunities.id, existing.id)).returning();
+      return updated;
+    }
+    return this.createOpportunity(opportunity);
+  }
+
+  async deleteOpportunity(id: string): Promise<void> {
+    await db.delete(opportunities).where(eq(opportunities.id, id));
+  }
+
+  // Workflow Templates
+  async getWorkflowTemplates(): Promise<WorkflowTemplate[]> {
+    return await db.select().from(workflowTemplates).where(eq(workflowTemplates.isActive, true));
+  }
+
+  async getWorkflowTemplate(id: string): Promise<WorkflowTemplate | undefined> {
+    const [template] = await db.select().from(workflowTemplates).where(eq(workflowTemplates.id, id));
+    return template;
+  }
+
+  async createWorkflowTemplate(template: InsertWorkflowTemplate): Promise<WorkflowTemplate> {
+    const [created] = await db.insert(workflowTemplates).values(template).returning();
+    return created;
+  }
+
+  // Workflow Instances
+  async getWorkflowInstances(userId: string): Promise<WorkflowInstance[]> {
+    return await db.select().from(workflowInstances)
+      .where(eq(workflowInstances.userId, userId))
+      .orderBy(desc(workflowInstances.createdAt));
+  }
+
+  async getWorkflowInstance(id: string, userId: string): Promise<WorkflowInstance | undefined> {
+    const [instance] = await db.select().from(workflowInstances)
+      .where(and(eq(workflowInstances.id, id), eq(workflowInstances.userId, userId)));
+    return instance;
+  }
+
+  async getWorkflowInstanceByOpportunity(opportunityId: string, userId: string): Promise<WorkflowInstance | undefined> {
+    const [instance] = await db.select().from(workflowInstances)
+      .where(and(eq(workflowInstances.opportunityId, opportunityId), eq(workflowInstances.userId, userId)));
+    return instance;
+  }
+
+  async createWorkflowInstance(instance: InsertWorkflowInstance): Promise<WorkflowInstance> {
+    const [created] = await db.insert(workflowInstances).values(instance).returning();
+    return created;
+  }
+
+  async updateWorkflowInstance(id: string, userId: string, data: Partial<InsertWorkflowInstance>): Promise<WorkflowInstance> {
+    const [updated] = await db.update(workflowInstances).set({ ...data, updatedAt: new Date() })
+      .where(and(eq(workflowInstances.id, id), eq(workflowInstances.userId, userId))).returning();
+    return updated;
+  }
+
+  async deleteWorkflowInstance(id: string, userId: string): Promise<void> {
+    await db.delete(workflowInstances).where(and(eq(workflowInstances.id, id), eq(workflowInstances.userId, userId)));
   }
 }
 

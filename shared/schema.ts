@@ -190,6 +190,71 @@ export const formSubmissions = pgTable("form_submissions", {
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [index("idx_form_submissions_user").on(table.userId)]);
 
+// SAM.gov opportunities
+export const opportunities = pgTable("opportunities", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  externalId: varchar("external_id").notNull(), // SAM.gov noticeId
+  title: varchar("title").notNull(),
+  solicitationNumber: varchar("solicitation_number"),
+  agency: varchar("agency"),
+  subAgency: varchar("sub_agency"),
+  office: varchar("office"),
+  noticeType: varchar("notice_type"), // presolicitation, solicitation, combined, etc.
+  contractType: varchar("contract_type"), // Fixed Price, Cost Reimbursement, etc.
+  naicsCodes: text("naics_codes"), // JSON array of NAICS codes
+  pscCodes: text("psc_codes"), // JSON array of PSC codes
+  setAsideType: varchar("set_aside_type"), // Small Business, 8(a), HUBZone, etc.
+  responseDeadline: timestamp("response_deadline"),
+  postedDate: timestamp("posted_date"),
+  archiveDate: timestamp("archive_date"),
+  placeOfPerformance: text("place_of_performance"), // JSON with city/state/country
+  description: text("description"),
+  synopsis: text("synopsis"),
+  contactInfo: text("contact_info"), // JSON with contact details
+  attachmentLinks: text("attachment_links"), // JSON array of attachment URLs
+  rawJson: text("raw_json"), // Full API response for reference
+  syncedAt: timestamp("synced_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [index("idx_opportunities_external").on(table.externalId)]);
+
+// Workflow templates for different opportunity types
+export const workflowTemplates = pgTable("workflow_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull(),
+  description: text("description"),
+  triggerRules: text("trigger_rules"), // JSON: NAICS codes, notice types, contract types that trigger this template
+  componentStageMatrix: text("component_stage_matrix"), // JSON: which components/stages are relevant
+  defaultActions: text("default_actions"), // JSON: default action items to create
+  recommendedGuides: text("recommended_guides"), // JSON: array of guide IDs
+  recommendedForms: text("recommended_forms"), // JSON: array of form template IDs
+  estimatedDuration: integer("estimated_duration"), // Days to complete
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Workflow instances - links opportunities to active workflows
+export const workflowInstances = pgTable("workflow_instances", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  opportunityId: varchar("opportunity_id").notNull(),
+  templateId: varchar("template_id"),
+  userId: varchar("user_id").notNull(),
+  clientId: varchar("client_id"),
+  name: varchar("name").notNull(),
+  status: varchar("status").default("active"), // active, paused, completed, archived
+  startDate: timestamp("start_date").defaultNow(),
+  targetDate: timestamp("target_date"), // Typically response deadline
+  completedAt: timestamp("completed_at"),
+  notes: text("notes"),
+  customConfig: text("custom_config"), // JSON: any customizations to the template
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_workflow_instances_opportunity").on(table.opportunityId),
+  index("idx_workflow_instances_user").on(table.userId),
+]);
+
 // Messages for async communication
 export const messages = pgTable("messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -308,3 +373,30 @@ export type FormTemplate = typeof formTemplates.$inferSelect;
 export type InsertFormTemplate = z.infer<typeof insertFormTemplateSchema>;
 export type FormSubmission = typeof formSubmissions.$inferSelect;
 export type InsertFormSubmission = z.infer<typeof insertFormSubmissionSchema>;
+
+// Opportunity schemas
+export const insertOpportunitySchema = createInsertSchema(opportunities).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  syncedAt: true,
+});
+
+export const insertWorkflowTemplateSchema = createInsertSchema(workflowTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertWorkflowInstanceSchema = createInsertSchema(workflowInstances).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Opportunity = typeof opportunities.$inferSelect;
+export type InsertOpportunity = z.infer<typeof insertOpportunitySchema>;
+export type WorkflowTemplate = typeof workflowTemplates.$inferSelect;
+export type InsertWorkflowTemplate = z.infer<typeof insertWorkflowTemplateSchema>;
+export type WorkflowInstance = typeof workflowInstances.$inferSelect;
+export type InsertWorkflowInstance = z.infer<typeof insertWorkflowInstanceSchema>;

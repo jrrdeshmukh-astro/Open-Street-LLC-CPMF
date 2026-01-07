@@ -1,7 +1,7 @@
 import { 
   workflowProgress, artifacts, clients, timeEntries, actions, invoices, invoiceItems, debriefTemplates, debriefRecords, messages,
   guides, formTemplates, formSubmissions, opportunities, workflowTemplates, workflowInstances, collaborations, jiraSettings,
-  slackSettings, sessionActivities,
+  slackSettings, sessionActivities, asanaSettings,
   type WorkflowProgress, type InsertWorkflowProgress,
   type Artifact, type InsertArtifact,
   type Client, type InsertClient,
@@ -21,7 +21,8 @@ import {
   type Collaboration, type InsertCollaboration,
   type JiraSettings, type InsertJiraSettings,
   type SlackSettings, type InsertSlackSettings,
-  type SessionActivity, type InsertSessionActivity
+  type SessionActivity, type InsertSessionActivity,
+  type AsanaSettings, type InsertAsanaSettings
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc, or, inArray } from "drizzle-orm";
@@ -643,6 +644,71 @@ export class DatabaseStorage {
       .where(eq(messages.id, messageId))
       .returning();
     return updated;
+  }
+
+  // Asana Settings
+  async getAsanaSettings(userId: string): Promise<AsanaSettings | undefined> {
+    const [settings] = await db.select().from(asanaSettings).where(eq(asanaSettings.userId, userId));
+    return settings;
+  }
+
+  async upsertAsanaSettings(settings: InsertAsanaSettings): Promise<AsanaSettings> {
+    const existing = await this.getAsanaSettings(settings.userId);
+    if (existing) {
+      const [updated] = await db.update(asanaSettings)
+        .set({ ...settings, updatedAt: new Date() })
+        .where(eq(asanaSettings.userId, settings.userId))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(asanaSettings).values(settings).returning();
+    return created;
+  }
+
+  async deleteAsanaSettings(userId: string): Promise<void> {
+    await db.delete(asanaSettings).where(eq(asanaSettings.userId, userId));
+  }
+
+  async updateAsanaLastSync(userId: string): Promise<void> {
+    await db.update(asanaSettings)
+      .set({ lastSyncAt: new Date(), updatedAt: new Date() })
+      .where(eq(asanaSettings.userId, userId));
+  }
+
+  // Client contracting stage management
+  async updateClientContractingStage(clientId: string, userId: string, stage: string, notes?: string): Promise<Client> {
+    const [client] = await db.select().from(clients).where(and(eq(clients.id, clientId), eq(clients.userId, userId)));
+    if (!client) throw new Error("Client not found");
+    
+    const history = client.contractingStageHistory ? JSON.parse(client.contractingStageHistory) : [];
+    history.push({ stage, date: new Date().toISOString(), notes: notes || "" });
+    
+    const [updated] = await db.update(clients)
+      .set({ 
+        contractingStage: stage, 
+        contractingStageHistory: JSON.stringify(history),
+        updatedAt: new Date() 
+      })
+      .where(eq(clients.id, clientId))
+      .returning();
+    return updated;
+  }
+
+  async updateClientAsanaInfo(clientId: string, asanaInfo: {
+    asanaProjectId?: string;
+    asanaTaskId?: string;
+    asanaSyncedAt?: Date;
+  }): Promise<Client> {
+    const [updated] = await db.update(clients)
+      .set({ ...asanaInfo, updatedAt: new Date() })
+      .where(eq(clients.id, clientId))
+      .returning();
+    return updated;
+  }
+
+  async getClientsByContractingStage(userId: string, stage: string): Promise<Client[]> {
+    return await db.select().from(clients)
+      .where(and(eq(clients.userId, userId), eq(clients.contractingStage, stage)));
   }
 }
 

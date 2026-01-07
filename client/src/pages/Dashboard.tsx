@@ -78,6 +78,20 @@ export default function Dashboard() {
   const [selectedFormTemplate, setSelectedFormTemplate] = useState<FormTemplate | null>(null);
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [formDialogOpen, setFormDialogOpen] = useState(false);
+  
+  // Jira integration state
+  const [jiraSettingsOpen, setJiraSettingsOpen] = useState(false);
+  const [jiraDomain, setJiraDomain] = useState("");
+  const [jiraEmail, setJiraEmail] = useState("");
+  const [jiraApiToken, setJiraApiToken] = useState("");
+  const [jiraDefaultProject, setJiraDefaultProject] = useState("");
+
+  // Jira queries
+  const { data: jiraSettings } = useQuery<any>({ queryKey: ["/api/jira/settings"], enabled: !!user });
+  const { data: jiraProjects = [] } = useQuery<{ id: string; key: string; name: string }[]>({ 
+    queryKey: ["/api/jira/projects"], 
+    enabled: !!user && !!jiraSettings?.hasApiToken 
+  });
 
   const progressMutation = useMutation({
     mutationFn: async (data: { componentId: string; stage: string; completed: boolean; notes?: string }) => {
@@ -182,6 +196,74 @@ export default function Dashboard() {
       queryClient.invalidateQueries({ queryKey: ["/api/collaborations/pending"] }); 
       toast({ title: "Invitation declined" }); 
     },
+  });
+
+  // Jira mutations
+  const saveJiraSettingsMutation = useMutation({
+    mutationFn: async (data: { jiraDomain: string; jiraEmail: string; jiraApiToken: string; defaultProjectKey?: string }) => {
+      const res = await fetch("/api/jira/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data), credentials: "include" });
+      if (!res.ok) throw new Error("Failed to save Jira settings");
+      return res.json();
+    },
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ["/api/jira/settings"] }); 
+      queryClient.invalidateQueries({ queryKey: ["/api/jira/projects"] }); 
+      toast({ title: "Jira connected", description: "Your Jira settings have been saved." }); 
+      setJiraSettingsOpen(false);
+      setJiraApiToken("");
+    },
+    onError: () => toast({ title: "Failed to connect", description: "Check your credentials and try again.", variant: "destructive" })
+  });
+
+  const testJiraConnectionMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/jira/test", { method: "POST", credentials: "include" });
+      if (!res.ok) throw new Error("Connection failed");
+      return res.json();
+    },
+    onSuccess: (data) => toast({ title: "Connected!", description: `Logged in as ${data.user?.displayName}` }),
+    onError: () => toast({ title: "Connection failed", description: "Check your Jira credentials.", variant: "destructive" })
+  });
+
+  const pushToJiraMutation = useMutation({
+    mutationFn: async ({ actionId, projectKey }: { actionId: string; projectKey?: string }) => {
+      const res = await fetch(`/api/jira/push/${actionId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectKey }), credentials: "include" });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message);
+      }
+      return res.json();
+    },
+    onSuccess: (data) => { 
+      queryClient.invalidateQueries({ queryKey: ["/api/actions"] }); 
+      toast({ title: "Pushed to Jira", description: `Created issue ${data.jiraKey}` }); 
+    },
+    onError: (error: Error) => toast({ title: "Failed to push", description: error.message, variant: "destructive" })
+  });
+
+  const pullFromJiraMutation = useMutation({
+    mutationFn: async (projectKey?: string) => {
+      const res = await fetch("/api/jira/pull", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectKey }), credentials: "include" });
+      if (!res.ok) throw new Error("Failed to pull from Jira");
+      return res.json();
+    },
+    onSuccess: (data) => { 
+      queryClient.invalidateQueries({ queryKey: ["/api/actions"] }); 
+      toast({ title: "Synced from Jira", description: `Imported ${data.imported} issues` }); 
+    },
+    onError: () => toast({ title: "Sync failed", description: "Could not import from Jira", variant: "destructive" })
+  });
+
+  const syncActionMutation = useMutation({
+    mutationFn: async (actionId: string) => {
+      const res = await fetch(`/api/jira/sync/${actionId}`, { method: "POST", credentials: "include" });
+      if (!res.ok) throw new Error("Failed to sync");
+      return res.json();
+    },
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ["/api/actions"] }); 
+      toast({ title: "Synced with Jira" }); 
+    }
   });
 
   const handleStartForm = (template: FormTemplate) => {
@@ -766,38 +848,171 @@ export default function Dashboard() {
 
           {/* Actions Tab */}
           <TabsContent value="actions">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="font-serif">Action Waterfall</CardTitle>
-                <Dialog>
-                  <DialogTrigger asChild><Button data-testid="button-add-action"><Plus className="w-4 h-4 mr-2" />Add Action</Button></DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader><DialogTitle>New Action</DialogTitle></DialogHeader>
-                    <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); actionMutation.mutate({ title: fd.get("title") as string, description: fd.get("description") as string, startDate: new Date(fd.get("startDate") as string), dueDate: new Date(fd.get("dueDate") as string), priority: fd.get("priority") as string }); }} className="space-y-4">
-                      <div className="space-y-2"><Label>Title</Label><Input name="title" required data-testid="input-action-title" /></div>
-                      <div className="space-y-2"><Label>Description</Label><Textarea name="description" data-testid="textarea-action-description" /></div>
-                      <div className="grid grid-cols-2 gap-4"><div className="space-y-2"><Label>Start Date</Label><Input name="startDate" type="date" required data-testid="input-action-start" /></div><div className="space-y-2"><Label>Due Date</Label><Input name="dueDate" type="date" required data-testid="input-action-due" /></div></div>
-                      <div className="space-y-2"><Label>Priority</Label><Select name="priority" defaultValue="medium"><SelectTrigger data-testid="select-action-priority"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="low">Low</SelectItem><SelectItem value="medium">Medium</SelectItem><SelectItem value="high">High</SelectItem><SelectItem value="urgent">Urgent</SelectItem></SelectContent></Select></div>
-                      <Button type="submit" className="w-full" disabled={actionMutation.isPending} data-testid="button-submit-action">Create Action</Button>
-                    </form>
-                  </DialogContent>
-                </Dialog>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {actions.length === 0 ? <p className="text-center text-muted-foreground py-8">No actions scheduled. Create your first action item.</p> : actions.map((action) => {
-                    const isOverdue = new Date(action.dueDate) < new Date() && action.status !== "completed";
-                    return (
-                      <div key={action.id} className={`p-4 rounded-lg border ${isOverdue ? "border-red-200 bg-red-50" : "border-slate-200"}`} data-testid={`action-card-${action.id}`}>
-                        <div className="flex items-center justify-between mb-2"><span className="font-medium">{action.title}</span><div className="flex items-center gap-2"><Badge variant={action.priority === "urgent" ? "destructive" : action.priority === "high" ? "default" : "secondary"}>{action.priority}</Badge><Badge variant={action.status === "completed" ? "default" : "outline"}>{action.status}</Badge></div></div>
-                        <p className="text-sm text-muted-foreground mb-2">{action.description}</p>
-                        <div className="flex items-center justify-between text-sm"><span>Start: {new Date(action.startDate).toLocaleDateString()}</span><span className={isOverdue ? "text-red-600 font-medium" : ""}>Due: {new Date(action.dueDate).toLocaleDateString()}</span></div>
+            <div className="grid lg:grid-cols-3 gap-6">
+              <Card className="lg:col-span-2">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="font-serif">Action Waterfall</CardTitle>
+                  <div className="flex items-center gap-2">
+                    {jiraSettings?.hasApiToken && (
+                      <Button variant="outline" size="sm" onClick={() => pullFromJiraMutation.mutate(jiraSettings?.defaultProjectKey)} disabled={pullFromJiraMutation.isPending} data-testid="button-jira-pull">
+                        {pullFromJiraMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                        Sync from Jira
+                      </Button>
+                    )}
+                    <Dialog>
+                      <DialogTrigger asChild><Button data-testid="button-add-action"><Plus className="w-4 h-4 mr-2" />Add Action</Button></DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader><DialogTitle>New Action</DialogTitle></DialogHeader>
+                        <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); actionMutation.mutate({ title: fd.get("title") as string, description: fd.get("description") as string, startDate: new Date(fd.get("startDate") as string), dueDate: new Date(fd.get("dueDate") as string), priority: fd.get("priority") as string }); }} className="space-y-4">
+                          <div className="space-y-2"><Label>Title</Label><Input name="title" required data-testid="input-action-title" /></div>
+                          <div className="space-y-2"><Label>Description</Label><Textarea name="description" data-testid="textarea-action-description" /></div>
+                          <div className="grid grid-cols-2 gap-4"><div className="space-y-2"><Label>Start Date</Label><Input name="startDate" type="date" required data-testid="input-action-start" /></div><div className="space-y-2"><Label>Due Date</Label><Input name="dueDate" type="date" required data-testid="input-action-due" /></div></div>
+                          <div className="space-y-2"><Label>Priority</Label><Select name="priority" defaultValue="medium"><SelectTrigger data-testid="select-action-priority"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="low">Low</SelectItem><SelectItem value="medium">Medium</SelectItem><SelectItem value="high">High</SelectItem><SelectItem value="urgent">Urgent</SelectItem></SelectContent></Select></div>
+                          <Button type="submit" className="w-full" disabled={actionMutation.isPending} data-testid="button-submit-action">Create Action</Button>
+                        </form>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[450px]">
+                    <div className="space-y-3">
+                      {actions.length === 0 ? <p className="text-center text-muted-foreground py-8">No actions scheduled. Create your first action item.</p> : actions.map((action) => {
+                        const isOverdue = new Date(action.dueDate) < new Date() && action.status !== "completed";
+                        return (
+                          <div key={action.id} className={`p-4 rounded-lg border ${isOverdue ? "border-red-200 bg-red-50" : "border-slate-200"}`} data-testid={`action-card-${action.id}`}>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-medium">{action.title}</span>
+                              <div className="flex items-center gap-2">
+                                {action.jiraKey && (
+                                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                    {action.jiraKey}
+                                  </Badge>
+                                )}
+                                <Badge variant={action.priority === "urgent" ? "destructive" : action.priority === "high" ? "default" : "secondary"}>{action.priority}</Badge>
+                                <Badge variant={action.status === "completed" ? "default" : "outline"}>{action.status}</Badge>
+                              </div>
+                            </div>
+                            <p className="text-sm text-muted-foreground mb-2">{action.description}</p>
+                            <div className="flex items-center justify-between text-sm">
+                              <span>Start: {new Date(action.startDate).toLocaleDateString()}</span>
+                              <span className={isOverdue ? "text-red-600 font-medium" : ""}>Due: {new Date(action.dueDate).toLocaleDateString()}</span>
+                            </div>
+                            {jiraSettings?.hasApiToken && (
+                              <div className="mt-3 pt-3 border-t flex items-center gap-2">
+                                {action.jiraKey ? (
+                                  <>
+                                    <Button size="sm" variant="ghost" onClick={() => syncActionMutation.mutate(action.id)} disabled={syncActionMutation.isPending}>
+                                      <RefreshCw className="w-3 h-3 mr-1" />Sync
+                                    </Button>
+                                    {action.jiraStatus && <span className="text-xs text-muted-foreground">Jira: {action.jiraStatus}</span>}
+                                  </>
+                                ) : (
+                                  <Button size="sm" variant="outline" onClick={() => pushToJiraMutation.mutate({ actionId: action.id })} disabled={pushToJiraMutation.isPending} data-testid={`button-push-jira-${action.id}`}>
+                                    {pushToJiraMutation.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
+                                    Push to Jira
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+
+              {/* Jira Integration Panel */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="font-serif text-lg flex items-center gap-2">
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M11.53 2c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V2.84A.84.84 0 0 0 21.16 2H11.53zm-2.77 5.19c0 2.4 1.94 4.35 4.34 4.36h1.78v1.7c0 2.4 1.94 4.35 4.35 4.35V8.04a.84.84 0 0 0-.84-.85H8.76zm-2.77 5.19c0 2.4 1.94 4.35 4.35 4.35h1.7v1.78c0 2.4 1.95 4.34 4.35 4.35v-9.63a.84.84 0 0 0-.84-.85H5.99z"/></svg>
+                    Jira Integration
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {jiraSettings?.hasApiToken ? (
+                    <>
+                      <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                        <div className="flex items-center gap-2 text-green-700">
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span className="font-medium">Connected</span>
+                        </div>
+                        <p className="text-sm text-green-600 mt-1">{jiraSettings.jiraDomain}</p>
                       </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
+                      
+                      {jiraSettings.defaultProjectKey && (
+                        <div className="p-3 bg-slate-50 rounded-lg">
+                          <p className="text-sm text-muted-foreground">Default Project</p>
+                          <p className="font-medium">{jiraSettings.defaultProjectKey}</p>
+                        </div>
+                      )}
+
+                      <div className="space-y-2">
+                        <Button variant="outline" className="w-full" onClick={() => testJiraConnectionMutation.mutate()} disabled={testJiraConnectionMutation.isPending} data-testid="button-test-jira">
+                          {testJiraConnectionMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                          Test Connection
+                        </Button>
+                        <Button variant="ghost" className="w-full" onClick={() => {
+                          setJiraDomain(jiraSettings?.jiraDomain || "");
+                          setJiraEmail(jiraSettings?.jiraEmail || "");
+                          setJiraDefaultProject(jiraSettings?.defaultProjectKey || "");
+                          setJiraSettingsOpen(true);
+                        }}>
+                          Update Settings
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm text-muted-foreground">
+                        Connect to Jira to sync your actions with Jira issues. You can push actions to Jira or import issues as actions.
+                      </p>
+                      <Button className="w-full" onClick={() => setJiraSettingsOpen(true)} data-testid="button-connect-jira">
+                        Connect to Jira
+                      </Button>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Jira Settings Dialog */}
+            <Dialog open={jiraSettingsOpen} onOpenChange={setJiraSettingsOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Jira Settings</DialogTitle>
+                  <DialogDescription>Enter your Jira Cloud credentials to enable two-way sync.</DialogDescription>
+                </DialogHeader>
+                <form onSubmit={(e) => { e.preventDefault(); saveJiraSettingsMutation.mutate({ jiraDomain, jiraEmail, jiraApiToken, defaultProjectKey: jiraDefaultProject }); }} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="jiraDomain">Jira Domain</Label>
+                    <Input id="jiraDomain" placeholder="yourcompany.atlassian.net" value={jiraDomain} onChange={(e) => setJiraDomain(e.target.value)} required data-testid="input-jira-domain" />
+                    <p className="text-xs text-muted-foreground">Your Atlassian domain (without https://)</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="jiraEmail">Email</Label>
+                    <Input id="jiraEmail" type="email" placeholder="you@example.com" value={jiraEmail} onChange={(e) => setJiraEmail(e.target.value)} required data-testid="input-jira-email" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="jiraApiToken">API Token</Label>
+                    <Input id="jiraApiToken" type="password" placeholder="Your Jira API token" value={jiraApiToken} onChange={(e) => setJiraApiToken(e.target.value)} required data-testid="input-jira-token" />
+                    <p className="text-xs text-muted-foreground">
+                      <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener noreferrer" className="text-primary underline">Create an API token</a> in your Atlassian account settings
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="jiraProject">Default Project Key (optional)</Label>
+                    <Input id="jiraProject" placeholder="PROJ" value={jiraDefaultProject} onChange={(e) => setJiraDefaultProject(e.target.value)} data-testid="input-jira-project" />
+                  </div>
+                  <Button type="submit" className="w-full" disabled={saveJiraSettingsMutation.isPending} data-testid="button-save-jira">
+                    {saveJiraSettingsMutation.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                    Save & Connect
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
           </TabsContent>
 
           {/* Billing Tab */}

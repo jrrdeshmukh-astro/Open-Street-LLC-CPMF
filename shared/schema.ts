@@ -359,6 +359,105 @@ export const asanaSettings = pgTable("asana_settings", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Contract templates for automated contract generation
+export const contractTemplates = pgTable("contract_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id"), // null = system template
+  name: varchar("name").notNull(),
+  description: text("description"),
+  templateType: varchar("template_type").notNull(), // nda, msa, sow, teaming_agreement, subcontract, consulting
+  content: text("content").notNull(), // Template content with {{placeholders}}
+  variables: text("variables"), // JSON array of variable definitions with names, types, defaults
+  isSystemTemplate: boolean("is_system_template").default(false),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Generated contracts
+export const contracts = pgTable("contracts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  clientId: varchar("client_id"),
+  templateId: varchar("template_id"),
+  contractNumber: varchar("contract_number").notNull(),
+  title: varchar("title").notNull(),
+  contractType: varchar("contract_type").notNull(),
+  content: text("content").notNull(), // Rendered contract content
+  variableValues: text("variable_values"), // JSON of filled variable values
+  status: varchar("status").default("draft"), // draft, pending_review, pending_signature, signed, expired, cancelled
+  version: integer("version").default(1),
+  effectiveDate: timestamp("effective_date"),
+  expirationDate: timestamp("expiration_date"),
+  totalValue: decimal("total_value", { precision: 12, scale: 2 }),
+  // Signing workflow
+  signatories: text("signatories"), // JSON array of {name, email, role, signedAt, signatureData}
+  legalReviewStatus: varchar("legal_review_status"), // pending, approved, rejected
+  legalReviewNotes: text("legal_review_notes"),
+  legalReviewedBy: varchar("legal_reviewed_by"),
+  legalReviewedAt: timestamp("legal_reviewed_at"),
+  // External integrations
+  externalDocId: varchar("external_doc_id"), // DocuSign, LegalZoom, etc.
+  externalService: varchar("external_service"), // docusign, legalzoom, pandadoc
+  externalStatus: varchar("external_status"),
+  signedDocumentUrl: varchar("signed_document_url"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_contracts_user").on(table.userId),
+  index("idx_contracts_client").on(table.clientId),
+]);
+
+// Legal service settings
+export const legalSettings = pgTable("legal_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().unique(),
+  preferredService: varchar("preferred_service"), // docusign, pandadoc, hellosign
+  docusignAccountId: varchar("docusign_account_id"),
+  docusignAccessToken: varchar("docusign_access_token"),
+  docusignRefreshToken: varchar("docusign_refresh_token"),
+  docusignEnvironment: varchar("docusign_environment").default("demo"), // demo, production
+  pandadocApiKey: varchar("pandadoc_api_key"),
+  pandadocWorkspaceId: varchar("pandadoc_workspace_id"),
+  defaultReviewerEmail: varchar("default_reviewer_email"),
+  defaultReviewerName: varchar("default_reviewer_name"),
+  autoSendForSignature: boolean("auto_send_for_signature").default(false),
+  requireLegalReview: boolean("require_legal_review").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Billing rates for specialized time tracking
+export const billingRates = pgTable("billing_rates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  name: varchar("name").notNull(), // e.g., "Senior Consultant", "Project Manager"
+  rate: decimal("rate", { precision: 10, scale: 2 }).notNull(),
+  rateType: varchar("rate_type").default("hourly"), // hourly, daily, fixed
+  laborCategory: varchar("labor_category"), // For government contracts: key personnel categories
+  isDefault: boolean("is_default").default(false),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Task codes for time tracking (project/task categorization)
+export const taskCodes = pgTable("task_codes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  clientId: varchar("client_id"),
+  code: varchar("code").notNull(), // e.g., "PROJ-001", "BD-REVIEW"
+  name: varchar("name").notNull(),
+  description: text("description"),
+  category: varchar("category"), // business_development, delivery, admin, training
+  isBillable: boolean("is_billable").default(true),
+  defaultBillingRateId: varchar("default_billing_rate_id"),
+  budgetHours: decimal("budget_hours", { precision: 10, scale: 2 }),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Collaborations - links industry partners and academia for shared workflows
 export const collaborations = pgTable("collaborations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -484,6 +583,36 @@ export const insertAsanaSettingsSchema = createInsertSchema(asanaSettings).omit(
   updatedAt: true,
 });
 
+export const insertContractTemplateSchema = createInsertSchema(contractTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertContractSchema = createInsertSchema(contracts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertLegalSettingsSchema = createInsertSchema(legalSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertBillingRateSchema = createInsertSchema(billingRates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertTaskCodeSchema = createInsertSchema(taskCodes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type WorkflowProgress = typeof workflowProgress.$inferSelect;
 export type InsertWorkflowProgress = z.infer<typeof insertWorkflowProgressSchema>;
@@ -521,6 +650,16 @@ export type SessionActivity = typeof sessionActivities.$inferSelect;
 export type InsertSessionActivity = z.infer<typeof insertSessionActivitySchema>;
 export type AsanaSettings = typeof asanaSettings.$inferSelect;
 export type InsertAsanaSettings = z.infer<typeof insertAsanaSettingsSchema>;
+export type ContractTemplate = typeof contractTemplates.$inferSelect;
+export type InsertContractTemplate = z.infer<typeof insertContractTemplateSchema>;
+export type Contract = typeof contracts.$inferSelect;
+export type InsertContract = z.infer<typeof insertContractSchema>;
+export type LegalSettings = typeof legalSettings.$inferSelect;
+export type InsertLegalSettings = z.infer<typeof insertLegalSettingsSchema>;
+export type BillingRate = typeof billingRates.$inferSelect;
+export type InsertBillingRate = z.infer<typeof insertBillingRateSchema>;
+export type TaskCode = typeof taskCodes.$inferSelect;
+export type InsertTaskCode = z.infer<typeof insertTaskCodeSchema>;
 
 // Opportunity schemas
 export const insertOpportunitySchema = createInsertSchema(opportunities).omit({

@@ -1,7 +1,7 @@
 import { 
   workflowProgress, artifacts, clients, timeEntries, actions, invoices, invoiceItems, debriefTemplates, debriefRecords, messages,
   guides, formTemplates, formSubmissions, opportunities, workflowTemplates, workflowInstances, collaborations, jiraSettings,
-  slackSettings, sessionActivities, asanaSettings,
+  slackSettings, sessionActivities, asanaSettings, contractTemplates, contracts, legalSettings, billingRates, taskCodes,
   type WorkflowProgress, type InsertWorkflowProgress,
   type Artifact, type InsertArtifact,
   type Client, type InsertClient,
@@ -22,10 +22,15 @@ import {
   type JiraSettings, type InsertJiraSettings,
   type SlackSettings, type InsertSlackSettings,
   type SessionActivity, type InsertSessionActivity,
-  type AsanaSettings, type InsertAsanaSettings
+  type AsanaSettings, type InsertAsanaSettings,
+  type ContractTemplate, type InsertContractTemplate,
+  type Contract, type InsertContract,
+  type LegalSettings, type InsertLegalSettings,
+  type BillingRate, type InsertBillingRate,
+  type TaskCode, type InsertTaskCode
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, asc, or, inArray } from "drizzle-orm";
+import { eq, and, desc, asc, or, inArray, isNull } from "drizzle-orm";
 
 export class DatabaseStorage {
   // Workflow Progress
@@ -709,6 +714,168 @@ export class DatabaseStorage {
   async getClientsByContractingStage(userId: string, stage: string): Promise<Client[]> {
     return await db.select().from(clients)
       .where(and(eq(clients.userId, userId), eq(clients.contractingStage, stage)));
+  }
+
+  // Billing rates
+  async getBillingRates(userId: string): Promise<BillingRate[]> {
+    return await db.select().from(billingRates).where(eq(billingRates.userId, userId));
+  }
+
+  async createBillingRate(data: InsertBillingRate): Promise<BillingRate> {
+    if (data.isDefault) {
+      await db.update(billingRates).set({ isDefault: false }).where(eq(billingRates.userId, data.userId));
+    }
+    const [rate] = await db.insert(billingRates).values(data).returning();
+    return rate;
+  }
+
+  async updateBillingRate(id: string, userId: string, data: Partial<InsertBillingRate>): Promise<BillingRate> {
+    if (data.isDefault) {
+      await db.update(billingRates).set({ isDefault: false }).where(eq(billingRates.userId, userId));
+    }
+    const [rate] = await db.update(billingRates).set({ ...data, updatedAt: new Date() })
+      .where(and(eq(billingRates.id, id), eq(billingRates.userId, userId))).returning();
+    return rate;
+  }
+
+  async deleteBillingRate(id: string, userId: string): Promise<void> {
+    await db.delete(billingRates).where(and(eq(billingRates.id, id), eq(billingRates.userId, userId)));
+  }
+
+  // Task codes
+  async getTaskCodes(userId: string, clientId?: string): Promise<TaskCode[]> {
+    if (clientId) {
+      return await db.select().from(taskCodes).where(and(eq(taskCodes.userId, userId), or(eq(taskCodes.clientId, clientId), isNull(taskCodes.clientId))));
+    }
+    return await db.select().from(taskCodes).where(eq(taskCodes.userId, userId));
+  }
+
+  async createTaskCode(data: InsertTaskCode): Promise<TaskCode> {
+    const [code] = await db.insert(taskCodes).values(data).returning();
+    return code;
+  }
+
+  async updateTaskCode(id: string, userId: string, data: Partial<InsertTaskCode>): Promise<TaskCode> {
+    const [code] = await db.update(taskCodes).set({ ...data, updatedAt: new Date() })
+      .where(and(eq(taskCodes.id, id), eq(taskCodes.userId, userId))).returning();
+    return code;
+  }
+
+  async deleteTaskCode(id: string, userId: string): Promise<void> {
+    await db.delete(taskCodes).where(and(eq(taskCodes.id, id), eq(taskCodes.userId, userId)));
+  }
+
+  // Contract templates
+  async getContractTemplates(userId: string): Promise<ContractTemplate[]> {
+    return await db.select().from(contractTemplates).where(or(eq(contractTemplates.userId, userId), eq(contractTemplates.isSystemTemplate, true)));
+  }
+
+  async getContractTemplate(id: string): Promise<ContractTemplate | undefined> {
+    const [template] = await db.select().from(contractTemplates).where(eq(contractTemplates.id, id));
+    return template;
+  }
+
+  async createContractTemplate(data: InsertContractTemplate): Promise<ContractTemplate> {
+    const [template] = await db.insert(contractTemplates).values(data).returning();
+    return template;
+  }
+
+  async updateContractTemplate(id: string, userId: string, data: Partial<InsertContractTemplate>): Promise<ContractTemplate> {
+    const [template] = await db.update(contractTemplates).set({ ...data, updatedAt: new Date() })
+      .where(and(eq(contractTemplates.id, id), eq(contractTemplates.userId, userId))).returning();
+    return template;
+  }
+
+  async deleteContractTemplate(id: string, userId: string): Promise<void> {
+    await db.delete(contractTemplates).where(and(eq(contractTemplates.id, id), eq(contractTemplates.userId, userId)));
+  }
+
+  // Contracts
+  async getContracts(userId: string, clientId?: string): Promise<Contract[]> {
+    if (clientId) {
+      return await db.select().from(contracts).where(and(eq(contracts.userId, userId), eq(contracts.clientId, clientId)));
+    }
+    return await db.select().from(contracts).where(eq(contracts.userId, userId));
+  }
+
+  async getContract(id: string, userId: string): Promise<Contract | undefined> {
+    const [contract] = await db.select().from(contracts).where(and(eq(contracts.id, id), eq(contracts.userId, userId)));
+    return contract;
+  }
+
+  async createContract(data: InsertContract): Promise<Contract> {
+    const [contract] = await db.insert(contracts).values(data).returning();
+    return contract;
+  }
+
+  async updateContract(id: string, userId: string, data: Partial<InsertContract>): Promise<Contract> {
+    const [contract] = await db.update(contracts).set({ ...data, updatedAt: new Date() })
+      .where(and(eq(contracts.id, id), eq(contracts.userId, userId))).returning();
+    return contract;
+  }
+
+  async deleteContract(id: string, userId: string): Promise<void> {
+    await db.delete(contracts).where(and(eq(contracts.id, id), eq(contracts.userId, userId)));
+  }
+
+  async generateContractNumber(userId: string): Promise<string> {
+    const year = new Date().getFullYear();
+    const count = await db.select().from(contracts).where(eq(contracts.userId, userId));
+    return `OSL-${year}-${String(count.length + 1).padStart(4, '0')}`;
+  }
+
+  // Legal settings
+  async getLegalSettings(userId: string): Promise<LegalSettings | undefined> {
+    const [settings] = await db.select().from(legalSettings).where(eq(legalSettings.userId, userId));
+    return settings;
+  }
+
+  async upsertLegalSettings(data: Partial<InsertLegalSettings> & { userId: string }): Promise<LegalSettings> {
+    const existing = await this.getLegalSettings(data.userId);
+    if (existing) {
+      const [updated] = await db.update(legalSettings).set({ ...data, updatedAt: new Date() })
+        .where(eq(legalSettings.userId, data.userId)).returning();
+      return updated;
+    }
+    const [created] = await db.insert(legalSettings).values(data as InsertLegalSettings).returning();
+    return created;
+  }
+
+  // Auto-generate invoice from time entries
+  async generateInvoiceFromTimeEntries(userId: string, clientId: string, timeEntryIds: string[]): Promise<Invoice> {
+    const entries = await db.select().from(timeEntries).where(and(eq(timeEntries.userId, userId), eq(timeEntries.clientId, clientId), eq(timeEntries.billable, true), eq(timeEntries.invoiced, false)));
+    const filteredEntries = timeEntryIds.length > 0 ? entries.filter(e => timeEntryIds.includes(e.id)) : entries;
+    
+    let subtotal = 0;
+    for (const entry of filteredEntries) {
+      const hours = (entry.durationMinutes || 0) / 60;
+      const rate = parseFloat(entry.hourlyRate || "0");
+      subtotal += hours * rate;
+    }
+    
+    const invoiceNumber = await this.generateInvoiceNumber(userId);
+    const [invoice] = await db.insert(invoices).values({
+      userId, clientId, invoiceNumber, status: "draft",
+      subtotal: subtotal.toFixed(2), taxRate: "0", taxAmount: "0", total: subtotal.toFixed(2),
+      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+    }).returning();
+    
+    for (const entry of filteredEntries) {
+      const hours = (entry.durationMinutes || 0) / 60;
+      const rate = parseFloat(entry.hourlyRate || "0");
+      await db.insert(invoiceItems).values({
+        invoiceId: invoice.id, description: entry.description, quantity: hours.toFixed(2), unitPrice: rate.toFixed(2), total: (hours * rate).toFixed(2)
+      });
+      await db.update(timeEntries).set({ invoiced: true, invoiceId: invoice.id }).where(eq(timeEntries.id, entry.id));
+    }
+    
+    return invoice;
+  }
+
+  async generateInvoiceNumber(userId: string): Promise<string> {
+    const year = new Date().getFullYear();
+    const count = await db.select().from(invoices).where(eq(invoices.userId, userId));
+    return `INV-${year}-${String(count.length + 1).padStart(4, '0')}`;
   }
 }
 

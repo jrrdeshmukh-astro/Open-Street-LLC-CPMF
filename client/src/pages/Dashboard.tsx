@@ -14,12 +14,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { 
   FileText, LogOut, CheckCircle2, Circle, Users, Shield, RefreshCw, Search, Target, Home, Save, Loader2,
-  Clock, Calendar, DollarSign, MessageSquare, ClipboardList, Plus, Play, Pause, Building2
+  Clock, Calendar, DollarSign, MessageSquare, ClipboardList, Plus, Play, Pause, Building2, BookOpen, FileCheck, ChevronRight
 } from "lucide-react";
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import type { WorkflowProgress, Artifact, Client, TimeEntry, Action, Invoice, DebriefTemplate, Message } from "@shared/schema";
+import type { WorkflowProgress, Artifact, Client, TimeEntry, Action, Invoice, DebriefTemplate, Message, Guide, FormTemplate, FormSubmission } from "@shared/schema";
 
 const FRAMEWORK_COMPONENTS = [
   { id: "engagement_structure", name: "Engagement Structure", icon: Users, description: "Program charter, stakeholder roles, and meeting cadence", artifacts: ["program_charter", "stakeholder_map", "meeting_schedule"] },
@@ -63,6 +63,11 @@ export default function Dashboard() {
   const { data: invoices = [] } = useQuery<Invoice[]>({ queryKey: ["/api/invoices"], enabled: !!user });
   const { data: debriefTemplates = [] } = useQuery<DebriefTemplate[]>({ queryKey: ["/api/debrief-templates"], enabled: !!user });
   const { data: messages = [] } = useQuery<Message[]>({ queryKey: ["/api/messages"], enabled: !!user });
+  const { data: allGuides = [] } = useQuery<Guide[]>({ queryKey: ["/api/guides"], enabled: !!user });
+  const { data: allFormTemplates = [] } = useQuery<FormTemplate[]>({ queryKey: ["/api/form-templates"], enabled: !!user });
+  const { data: formSubmissions = [] } = useQuery<FormSubmission[]>({ queryKey: ["/api/form-submissions"], enabled: !!user });
+  const [selectedGuide, setSelectedGuide] = useState<Guide | null>(null);
+  const [activeStage, setActiveStage] = useState("initiation");
 
   const progressMutation = useMutation({
     mutationFn: async (data: { componentId: string; stage: string; completed: boolean; notes?: string }) => {
@@ -158,8 +163,9 @@ export default function Dashboard() {
 
       <div className="max-w-7xl mx-auto p-6">
         <Tabs defaultValue="workflow" className="w-full">
-          <TabsList className="grid w-full grid-cols-7 mb-6">
+          <TabsList className="grid w-full grid-cols-8 mb-6">
             <TabsTrigger value="workflow" className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> Workflow</TabsTrigger>
+            <TabsTrigger value="resources" className="flex items-center gap-2"><BookOpen className="w-4 h-4" /> Resources</TabsTrigger>
             <TabsTrigger value="clients" className="flex items-center gap-2"><Building2 className="w-4 h-4" /> Clients</TabsTrigger>
             <TabsTrigger value="time" className="flex items-center gap-2"><Clock className="w-4 h-4" /> Time</TabsTrigger>
             <TabsTrigger value="actions" className="flex items-center gap-2"><Calendar className="w-4 h-4" /> Actions</TabsTrigger>
@@ -240,6 +246,161 @@ export default function Dashboard() {
                   </ScrollArea>
                 </CardContent>
               </Card>
+            </div>
+          </TabsContent>
+
+          {/* Resources Tab */}
+          <TabsContent value="resources">
+            <div className="grid lg:grid-cols-3 gap-6">
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle className="font-serif flex items-center gap-2"><BookOpen className="w-5 h-5" /> Resource Library</CardTitle>
+                  <CardDescription>Guides, forms, and documentation for each stage of the CPMF framework</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex gap-4 mb-6">
+                    <Select value={activeComponent} onValueChange={setActiveComponent}>
+                      <SelectTrigger className="w-[200px]" data-testid="select-resource-component">
+                        <SelectValue placeholder="Select component" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {FRAMEWORK_COMPONENTS.map(c => (
+                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={activeStage} onValueChange={setActiveStage}>
+                      <SelectTrigger className="w-[150px]" data-testid="select-resource-stage">
+                        <SelectValue placeholder="Select stage" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(STAGE_LABELS).map(([key, label]) => (
+                          <SelectItem key={key} value={key}>{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <ScrollArea className="h-[500px]">
+                    <div className="space-y-4">
+                      {allGuides.filter(g => g.componentId === activeComponent && g.stage === activeStage).map(guide => (
+                        <Card key={guide.id} className="cursor-pointer hover:border-primary/50 transition-colors" onClick={() => setSelectedGuide(guide)} data-testid={`guide-card-${guide.id}`}>
+                          <CardHeader className="pb-2">
+                            <div className="flex items-center justify-between">
+                              <CardTitle className="text-base font-medium flex items-center gap-2">
+                                <BookOpen className="w-4 h-4 text-[#bfa15f]" />
+                                {guide.title}
+                              </CardTitle>
+                              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                            </div>
+                          </CardHeader>
+                          <CardContent className="pt-0">
+                            <p className="text-sm text-muted-foreground">{guide.summary}</p>
+                          </CardContent>
+                        </Card>
+                      ))}
+                      
+                      {allFormTemplates.filter(t => t.componentId === activeComponent && t.stage === activeStage).map(template => (
+                        <Card key={template.id} className="border-[#bfa15f]/30 bg-[#bfa15f]/5" data-testid={`form-template-${template.id}`}>
+                          <CardHeader className="pb-2">
+                            <div className="flex items-center justify-between">
+                              <CardTitle className="text-base font-medium flex items-center gap-2">
+                                <FileCheck className="w-4 h-4 text-[#bfa15f]" />
+                                {template.title}
+                              </CardTitle>
+                              <Badge className="bg-[#bfa15f]">Form</Badge>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="pt-0">
+                            <p className="text-sm text-muted-foreground mb-3">{template.description}</p>
+                            <Button size="sm" variant="outline" data-testid={`button-start-form-${template.id}`}>
+                              <FileCheck className="w-4 h-4 mr-2" />Start Form
+                            </Button>
+                          </CardContent>
+                        </Card>
+                      ))}
+                      
+                      {allGuides.filter(g => g.componentId === activeComponent && g.stage === activeStage).length === 0 &&
+                       allFormTemplates.filter(t => t.componentId === activeComponent && t.stage === activeStage).length === 0 && (
+                        <div className="text-center py-12 text-muted-foreground">
+                          <BookOpen className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                          <p>No resources available for this stage yet.</p>
+                        </div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+              
+              <div className="space-y-6">
+                {selectedGuide ? (
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="font-serif text-lg">{selectedGuide.title}</CardTitle>
+                        <Button variant="ghost" size="sm" onClick={() => setSelectedGuide(null)}>Close</Button>
+                      </div>
+                      <CardDescription>{selectedGuide.summary}</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ScrollArea className="h-[400px]">
+                        <div className="prose prose-sm max-w-none">
+                          {selectedGuide.content.split('\n').map((line, i) => {
+                            if (line.startsWith('## ')) return <h2 key={i} className="text-lg font-semibold mt-4 mb-2">{line.slice(3)}</h2>;
+                            if (line.startsWith('### ')) return <h3 key={i} className="text-base font-medium mt-3 mb-1">{line.slice(4)}</h3>;
+                            if (line.startsWith('- ')) return <li key={i} className="ml-4">{line.slice(2)}</li>;
+                            if (line.match(/^\d+\./)) return <li key={i} className="ml-4">{line}</li>;
+                            if (line.trim() === '') return <br key={i} />;
+                            return <p key={i} className="text-sm text-muted-foreground">{line}</p>;
+                          })}
+                        </div>
+                      </ScrollArea>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="font-serif">Quick Stats</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                        <span>Total Guides</span>
+                        <span className="font-bold text-xl">{allGuides.length}</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                        <span>Form Templates</span>
+                        <span className="font-bold text-xl">{allFormTemplates.length}</span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                        <span>Your Submissions</span>
+                        <span className="font-bold text-xl">{formSubmissions.length}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+                
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="font-serif text-base">Your Form Submissions</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ScrollArea className="h-[200px]">
+                      {formSubmissions.length === 0 ? (
+                        <p className="text-center text-muted-foreground py-4">No submissions yet. Complete a form to get started.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {formSubmissions.map(sub => (
+                            <div key={sub.id} className="p-3 rounded-lg border border-slate-200 flex items-center justify-between" data-testid={`submission-${sub.id}`}>
+                              <span className="text-sm">{sub.componentId} - {sub.stage}</span>
+                              <Badge variant={sub.status === "submitted" ? "default" : "secondary"}>{sub.status}</Badge>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           </TabsContent>
 

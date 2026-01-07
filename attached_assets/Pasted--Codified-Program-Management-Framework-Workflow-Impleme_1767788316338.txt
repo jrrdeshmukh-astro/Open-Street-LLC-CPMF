@@ -1,0 +1,375 @@
+# Codified Program Management Framework - Workflow Implementation Guide
+
+This guide provides step-by-step instructions for implementing the Codified Program Management Framework workflow from [openstreet.info](https://openstreet.info/).
+
+## Overview
+
+The Codified Program Management Framework is a structured, repeatable approach to designing, governing, and facilitating multi-stakeholder engagement between government, industry, and academia. The framework focuses on **process and governance**, not outcomes or decision-making.
+
+## Framework Lifecycle
+
+The framework follows a structured lifecycle with four main stages:
+
+1. **Initiation** - Program setup and planning
+2. **Engagement** - Active stakeholder interaction
+3. **Synthesis** - Insight capture and analysis
+4. **Continuation** - Follow-on activities and program evolution
+
+## Implementation Steps
+
+### Step 1: Engagement Structure (Component 01)
+
+**Objective:** Define how engagement is organized
+
+**Activities:**
+1. **Define Program Objectives and Scope**
+   - Document clear program goals
+   - Establish scope boundaries (what's in/out)
+   - Identify success criteria
+
+2. **Design Engagement Formats**
+   - Select appropriate formats:
+     - Forums (large group discussions)
+     - Roundtables (focused topic discussions)
+     - Working Groups (collaborative problem-solving)
+   - Schedule and logistics planning
+
+3. **Establish Participant Roles**
+   - Government representatives
+   - Industry participants
+   - Academic contributors
+   - Facilitators/Moderators
+   - Observers (if applicable)
+
+4. **Define Program Lifecycle Stages**
+   - Initiation phase activities
+   - Engagement phase protocols
+   - Synthesis phase processes
+   - Continuation phase planning
+
+**Key Artifacts:**
+- Program Charter
+- Engagement Architecture Guide
+
+**Deliverables Checklist:**
+- [ ] Program Charter document
+- [ ] Engagement Architecture Guide
+- [ ] Participant role definitions
+- [ ] Lifecycle stage definitions
+- [ ] Format selection rationale
+
+---
+
+### Step 2: Governance & Compliance Guardrails (Component 02)
+
+**Objective:** Establish clear rules of engagement
+
+**Activities:**
+1. **Define Non-Solicitation Standards**
+   - Prohibit sales pitches
+   - Prevent procurement discussions
+   - Establish boundaries for commercial discussions
+
+2. **Establish Neutrality Principles**
+   - Facilitator independence
+   - Outcome-agnostic approach
+   - No endorsement policies
+
+3. **Document Prohibited Activities**
+   - Procurement/contracting discussions
+   - Advocacy for specific solutions
+   - Endorsement of participants
+   - Access to government officials (beyond informational)
+
+4. **Create Moderator Authority Framework**
+   - Escalation paths for violations
+   - Redirection protocols
+   - Session management authority
+
+**Key Artifacts:**
+- Governance Framework
+- Rules of Engagement
+
+**Deliverables Checklist:**
+- [ ] Governance Framework document
+- [ ] Rules of Engagement document
+- [ ] Non-solicitation standards
+- [ ] Neutrality statement
+- [ ] Prohibited activities list
+- [ ] Moderator authority guidelines
+- [ ] Escalation procedures
+
+---
+
+### Step 3: Facilitation & Moderation Playbooks (Component 03)
+
+**Objective:** Standardize how engagement is run in practice
+
+**Activities:**
+1. **Develop Approved Session Scripts**
+   - Opening scripts
+   - Discussion prompts
+   - Closing scripts
+   - Transition language
+
+2. **Create Facilitation Techniques**
+   - Balanced participation methods
+   - Time management protocols
+   - Conflict resolution approaches
+   - Engagement techniques
+
+3. **Establish Redirection Language**
+   - Templates for redirecting sales pitches
+   - Out-of-scope discussion handling
+   - Boundary enforcement phrases
+
+4. **Define Session Protocols**
+   - Opening procedures
+   - Closing procedures
+   - Break management
+   - Documentation requirements
+
+**Key Artifacts:**
+- Facilitator Guide
+- Moderator Scripts
+
+**Deliverables Checklist:**
+- [ ] Facilitator Guide
+- [ ] Moderator Scripts (opening, prompts, closing)
+- [ ] Facilitation techniques document
+- [ ] Redirection language templates
+- [ ] Session protocol checklist
+- [ ] Time management guidelines
+
+---
+
+### Step 4: Stakeholder Coordination (Component 04)
+
+**Objective:** Define how participants are onboarded and supported
+
+**Activities:**
+1. **Create Participant Briefing Materials**
+   - Framework overview
+   - Role expectations
+   - Compliance requirements
+   - Engagement formats explanation
+
+2. **Develop Role-Specific Onboarding**
+   - Government participant guide
+   - Industry participant guide
+   - Academic participant guide
+   - Facilitator onboarding
+
+3. **Establish Communication Workflows**
+   - Pre-engagement communications
+   - During-engagement coordination
+   - Post-engagement follow-up
+   - Escalation channels
+
+4. **Create Coordination Protocols**
+   - Scheduling procedures
+   - Material distribution
+   - Access management
+   - Support channels
+
+**Key Artifacts:**
+- Participant Briefings
+- Onboarding Packets
+
+**Deliverables Checklist:**
+- [ ] Participant Briefing materials
+- [ ] Role-specific onboarding guides
+- [ ] Communication workflow document
+- [ ] Coordination protocols
+- [ ] Support channel definitions
+- [ ] Pre-engagement checklist
+
+---
+
+### Step 5: Insight Capture & Continuity (Component 05)
+
+**Objective:** Ensure engagement produces durable value
+
+**Activities:**
+1. **Implement Non-Attributable Insight Capture**
+   - Anonymous feedback mechanisms
+   - Theme extraction methods
+   - IP protection protocols
+   - Confidentiality standards
+
+2. **Develop Cross-Sector Synthesis**
+   - Theme identification
+   - Pattern recognition
+   - Gap analysis
+   - Opportunity mapping
+
+3. **Document Scope Boundaries**
+   - What was discussed
+   - What was out of scope
+   - Decisions made (if any)
+   - Open questions
+
+4. **Plan Follow-On Engagement**
+   - Continuation options
+   - Program evolution paths
+   - Next steps documentation
+   - Roadmap development
+
+**Key Artifacts:**
+- Synthesis Reports
+- Engagement Roadmaps
+
+**Deliverables Checklist:**
+- [ ] Insight capture methodology
+- [ ] Non-attributable capture process
+- [ ] Synthesis report template
+- [ ] Theme extraction framework
+- [ ] Scope documentation template
+- [ ] Engagement roadmap template
+- [ ] Follow-on planning guide
+
+---
+
+## Workflow Execution Process
+
+### Phase 1: Initiation
+
+**Timeline:** 2-4 weeks before first engagement
+
+**Steps:**
+1. Complete Engagement Structure (Component 01)
+2. Complete Governance & Compliance (Component 02)
+3. Develop initial Facilitation Playbooks (Component 03)
+4. Begin Stakeholder Coordination (Component 04)
+5. Set up Insight Capture systems (Component 05)
+
+**Gate Review:** All artifacts from Components 01-02 must be complete before proceeding
+
+---
+
+### Phase 2: Engagement
+
+**Timeline:** Active engagement period
+
+**Steps:**
+1. Execute Facilitation Playbooks (Component 03)
+2. Continue Stakeholder Coordination (Component 04)
+3. Begin Insight Capture (Component 05)
+4. Monitor compliance with Governance rules (Component 02)
+5. Adjust Engagement Structure as needed (Component 01)
+
+**Ongoing Activities:**
+- Session facilitation using approved scripts
+- Real-time compliance monitoring
+- Participant support
+- Insight documentation
+
+---
+
+### Phase 3: Synthesis
+
+**Timeline:** 1-2 weeks after engagement period
+
+**Steps:**
+1. Complete Insight Capture (Component 05)
+2. Generate Synthesis Reports
+3. Create Engagement Roadmaps
+4. Document lessons learned
+5. Update framework artifacts based on experience
+
+**Deliverables:**
+- Synthesis Report
+- Engagement Roadmap
+- Framework improvement recommendations
+
+---
+
+### Phase 4: Continuation
+
+**Timeline:** Ongoing
+
+**Steps:**
+1. Review Synthesis Reports
+2. Plan follow-on activities
+3. Update Engagement Structure for next cycle
+4. Refine Governance rules based on experience
+5. Enhance Facilitation Playbooks
+6. Update Stakeholder Coordination materials
+
+**Outcomes:**
+- Program evolution
+- Framework refinement
+- Relationship building
+- Knowledge accumulation
+
+---
+
+## Compliance Checklist
+
+Before launching any engagement, ensure:
+
+- [ ] Program Charter is documented and approved
+- [ ] Governance Framework is in place
+- [ ] Rules of Engagement are documented
+- [ ] Facilitator Guide is complete
+- [ ] Moderator Scripts are approved
+- [ ] Participant Briefings are distributed
+- [ ] Onboarding is complete for all participants
+- [ ] Insight capture methodology is defined
+- [ ] Synthesis report template is ready
+- [ ] Compliance monitoring process is established
+
+---
+
+## Key Principles
+
+1. **Documented** - Everything is written and explicit
+2. **Repeatable** - Process is consistent across programs
+3. **Governed** - Clear compliance guardrails
+4. **Auditable** - All artifacts are traceable
+
+---
+
+## Framework Exclusions
+
+Remember: The framework does NOT:
+- Influence decisions or outcomes
+- Provide access to government officials
+- Support procurement or contracting activities
+- Endorse participants or solutions
+
+---
+
+## Getting Started
+
+1. **Review this guide** and the framework components
+2. **Assess your needs** - What type of engagement are you planning?
+3. **Start with Component 01** - Engagement Structure
+4. **Work sequentially** through the components
+5. **Use the workflow components** in the application to track progress
+6. **Document everything** - Create all required artifacts
+7. **Iterate and improve** - Refine based on experience
+
+---
+
+## Support Resources
+
+- Framework Configuration: `src/config/framework.js`
+- Framework Overview Component: `src/components/FrameworkOverview.jsx`
+- Workflow Manager: `src/components/WorkflowManager.jsx` (to be created)
+- Engagement Stages: `src/components/EngagementStage.jsx` (to be created)
+
+---
+
+## Next Steps
+
+1. Use the WorkflowManager component to track your implementation
+2. Follow the lifecycle stages in the EngagementStage component
+3. Manage artifacts using the ArtifactsManager component
+4. Document your progress at each stage
+5. Generate synthesis reports after engagement
+
+---
+
+*This framework is designed to be outcome-agnostic and focuses on process excellence. All engagement is informational and non-solicitation in nature.*
+

@@ -19,6 +19,7 @@ import {
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import ReactMarkdown from "react-markdown";
 import type { WorkflowProgress, Artifact, Client, TimeEntry, Action, Invoice, DebriefTemplate, Message, Guide, FormTemplate, FormSubmission } from "@shared/schema";
 
 const FRAMEWORK_COMPONENTS = [
@@ -67,7 +68,8 @@ export default function Dashboard() {
   const { data: allFormTemplates = [] } = useQuery<FormTemplate[]>({ queryKey: ["/api/form-templates"], enabled: !!user });
   const { data: formSubmissions = [] } = useQuery<FormSubmission[]>({ queryKey: ["/api/form-submissions"], enabled: !!user });
   const [selectedGuide, setSelectedGuide] = useState<Guide | null>(null);
-  const [activeStage, setActiveStage] = useState("initiation");
+  const [resourceComponent, setResourceComponent] = useState(FRAMEWORK_COMPONENTS[0].id);
+  const [resourceStage, setResourceStage] = useState("initiation");
 
   const progressMutation = useMutation({
     mutationFn: async (data: { componentId: string; stage: string; completed: boolean; notes?: string }) => {
@@ -259,7 +261,7 @@ export default function Dashboard() {
                 </CardHeader>
                 <CardContent>
                   <div className="flex gap-4 mb-6">
-                    <Select value={activeComponent} onValueChange={setActiveComponent}>
+                    <Select value={resourceComponent} onValueChange={setResourceComponent}>
                       <SelectTrigger className="w-[200px]" data-testid="select-resource-component">
                         <SelectValue placeholder="Select component" />
                       </SelectTrigger>
@@ -269,7 +271,7 @@ export default function Dashboard() {
                         ))}
                       </SelectContent>
                     </Select>
-                    <Select value={activeStage} onValueChange={setActiveStage}>
+                    <Select value={resourceStage} onValueChange={setResourceStage}>
                       <SelectTrigger className="w-[150px]" data-testid="select-resource-stage">
                         <SelectValue placeholder="Select stage" />
                       </SelectTrigger>
@@ -283,7 +285,10 @@ export default function Dashboard() {
                   
                   <ScrollArea className="h-[500px]">
                     <div className="space-y-4">
-                      {allGuides.filter(g => g.componentId === activeComponent && g.stage === activeStage).map(guide => (
+                      {allGuides
+                        .filter(g => g.componentId === resourceComponent && g.stage === resourceStage)
+                        .filter(g => !g.roleVisibility || g.roleVisibility.length === 0 || (user?.role && g.roleVisibility.includes(user.role)))
+                        .map(guide => (
                         <Card key={guide.id} className="cursor-pointer hover:border-primary/50 transition-colors" onClick={() => setSelectedGuide(guide)} data-testid={`guide-card-${guide.id}`}>
                           <CardHeader className="pb-2">
                             <div className="flex items-center justify-between">
@@ -300,7 +305,7 @@ export default function Dashboard() {
                         </Card>
                       ))}
                       
-                      {allFormTemplates.filter(t => t.componentId === activeComponent && t.stage === activeStage).map(template => (
+                      {allFormTemplates.filter(t => t.componentId === resourceComponent && t.stage === resourceStage).map(template => (
                         <Card key={template.id} className="border-[#bfa15f]/30 bg-[#bfa15f]/5" data-testid={`form-template-${template.id}`}>
                           <CardHeader className="pb-2">
                             <div className="flex items-center justify-between">
@@ -320,8 +325,8 @@ export default function Dashboard() {
                         </Card>
                       ))}
                       
-                      {allGuides.filter(g => g.componentId === activeComponent && g.stage === activeStage).length === 0 &&
-                       allFormTemplates.filter(t => t.componentId === activeComponent && t.stage === activeStage).length === 0 && (
+                      {allGuides.filter(g => g.componentId === resourceComponent && g.stage === resourceStage).filter(g => !g.roleVisibility || g.roleVisibility.length === 0 || (user?.role && g.roleVisibility.includes(user.role))).length === 0 &&
+                       allFormTemplates.filter(t => t.componentId === resourceComponent && t.stage === resourceStage).length === 0 && (
                         <div className="text-center py-12 text-muted-foreground">
                           <BookOpen className="w-12 h-12 mx-auto mb-4 opacity-50" />
                           <p>No resources available for this stage yet.</p>
@@ -344,15 +349,8 @@ export default function Dashboard() {
                     </CardHeader>
                     <CardContent>
                       <ScrollArea className="h-[400px]">
-                        <div className="prose prose-sm max-w-none">
-                          {selectedGuide.content.split('\n').map((line, i) => {
-                            if (line.startsWith('## ')) return <h2 key={i} className="text-lg font-semibold mt-4 mb-2">{line.slice(3)}</h2>;
-                            if (line.startsWith('### ')) return <h3 key={i} className="text-base font-medium mt-3 mb-1">{line.slice(4)}</h3>;
-                            if (line.startsWith('- ')) return <li key={i} className="ml-4">{line.slice(2)}</li>;
-                            if (line.match(/^\d+\./)) return <li key={i} className="ml-4">{line}</li>;
-                            if (line.trim() === '') return <br key={i} />;
-                            return <p key={i} className="text-sm text-muted-foreground">{line}</p>;
-                          })}
+                        <div className="prose prose-sm max-w-none [&>h2]:text-lg [&>h2]:font-semibold [&>h2]:mt-4 [&>h2]:mb-2 [&>h3]:text-base [&>h3]:font-medium [&>h3]:mt-3 [&>h3]:mb-1 [&>ul]:ml-4 [&>ol]:ml-4 [&>li]:ml-4 [&>p]:text-sm [&>p]:text-muted-foreground">
+                          <ReactMarkdown>{selectedGuide.content}</ReactMarkdown>
                         </div>
                       </ScrollArea>
                     </CardContent>

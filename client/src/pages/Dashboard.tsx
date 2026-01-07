@@ -14,13 +14,36 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { 
   FileText, LogOut, CheckCircle2, Circle, Users, Shield, RefreshCw, Search, Target, Home, Save, Loader2,
-  Clock, Calendar, DollarSign, MessageSquare, ClipboardList, Plus, Play, Pause, Building2, BookOpen, FileCheck, ChevronRight
+  Clock, Calendar, DollarSign, MessageSquare, ClipboardList, Plus, Play, Pause, Building2, BookOpen, FileCheck, ChevronRight, Globe, ExternalLink, Download
 } from "lucide-react";
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import ReactMarkdown from "react-markdown";
-import type { WorkflowProgress, Artifact, Client, TimeEntry, Action, Invoice, DebriefTemplate, Message, Guide, FormTemplate, FormSubmission } from "@shared/schema";
+import type { WorkflowProgress, Artifact, Client, TimeEntry, Action, Invoice, DebriefTemplate, Message, Guide, FormTemplate, FormSubmission, Opportunity, WorkflowInstance } from "@shared/schema";
+
+interface SamOpportunityResult {
+  externalId: string;
+  title: string;
+  solicitationNumber: string | null;
+  agency: string | null;
+  subAgency: string | null;
+  office: string | null;
+  noticeType: string | null;
+  contractType: string | null;
+  naicsCodes: string | null;
+  pscCodes: string | null;
+  setAsideType: string | null;
+  responseDeadline: string | null;
+  postedDate: string | null;
+  archiveDate: string | null;
+  placeOfPerformance: string | null;
+  description: string | null;
+  synopsis: string | null;
+  contactInfo: string | null;
+  attachmentLinks: string | null;
+  rawJson: string;
+}
 
 const FRAMEWORK_COMPONENTS = [
   { id: "engagement_structure", name: "Engagement Structure", icon: Users, description: "Program charter, stakeholder roles, and meeting cadence", artifacts: ["program_charter", "stakeholder_map", "meeting_schedule"] },
@@ -67,9 +90,17 @@ export default function Dashboard() {
   const { data: allGuides = [] } = useQuery<Guide[]>({ queryKey: ["/api/guides"], enabled: !!user });
   const { data: allFormTemplates = [] } = useQuery<FormTemplate[]>({ queryKey: ["/api/form-templates"], enabled: !!user });
   const { data: formSubmissions = [] } = useQuery<FormSubmission[]>({ queryKey: ["/api/form-submissions"], enabled: !!user });
+  const { data: savedOpportunities = [] } = useQuery<Opportunity[]>({ queryKey: ["/api/opportunities"], enabled: !!user });
+  const { data: workflowInstancesData = [] } = useQuery<WorkflowInstance[]>({ queryKey: ["/api/workflow-instances"], enabled: !!user });
+  const { data: samRefData } = useQuery<{ noticeTypes: { value: string; label: string }[]; setAsideTypes: { value: string; label: string }[] }>({ queryKey: ["/api/sam/reference-data"], enabled: !!user });
   const [selectedGuide, setSelectedGuide] = useState<Guide | null>(null);
   const [resourceComponent, setResourceComponent] = useState(FRAMEWORK_COMPONENTS[0].id);
   const [resourceStage, setResourceStage] = useState("initiation");
+  const [samKeyword, setSamKeyword] = useState("");
+  const [samNoticeType, setSamNoticeType] = useState("");
+  const [samSearching, setSamSearching] = useState(false);
+  const [samResults, setSamResults] = useState<SamOpportunityResult[]>([]);
+  const [samNeedsKey, setSamNeedsKey] = useState(false);
 
   const progressMutation = useMutation({
     mutationFn: async (data: { componentId: string; stage: string; completed: boolean; notes?: string }) => {
@@ -115,6 +146,60 @@ export default function Dashboard() {
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/messages"] }); toast({ title: "Message sent" }); },
   });
+
+  const opportunityMutation = useMutation({
+    mutationFn: async (data: SamOpportunityResult) => {
+      const res = await fetch("/api/opportunities", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data), credentials: "include" });
+      if (!res.ok) throw new Error("Failed to save opportunity");
+      return res.json();
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/opportunities"] }); toast({ title: "Opportunity saved" }); },
+  });
+
+  const workflowInstanceMutation = useMutation({
+    mutationFn: async (data: { opportunityId: string; name: string; targetDate?: Date | null }) => {
+      const res = await fetch("/api/workflow-instances", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data), credentials: "include" });
+      if (!res.ok) throw new Error("Failed to create workflow");
+      return res.json();
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/workflow-instances"] }); toast({ title: "Workflow created" }); },
+  });
+
+  const handleSamSearch = async () => {
+    setSamSearching(true);
+    setSamNeedsKey(false);
+    try {
+      const params = new URLSearchParams();
+      if (samKeyword) params.set("keyword", samKeyword);
+      if (samNoticeType) params.set("noticeType", samNoticeType);
+      const res = await fetch(`/api/sam/search?${params.toString()}`, { credentials: "include" });
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.needsApiKey) {
+          setSamNeedsKey(true);
+        } else {
+          toast({ title: "Search failed", description: data.message, variant: "destructive" });
+        }
+        setSamResults([]);
+        return;
+      }
+      setSamResults(data.opportunities || []);
+    } catch (error: any) {
+      toast({ title: "Search failed", description: error.message, variant: "destructive" });
+      setSamResults([]);
+    } finally {
+      setSamSearching(false);
+    }
+  };
+
+  const handleImportOpportunity = async (opp: InsertOpportunity) => {
+    const saved = await opportunityMutation.mutateAsync(opp);
+    await workflowInstanceMutation.mutateAsync({
+      opportunityId: saved.id,
+      name: opp.title,
+      targetDate: opp.responseDeadline,
+    });
+  };
 
   if (authLoading || !user) {
     return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
@@ -165,7 +250,8 @@ export default function Dashboard() {
 
       <div className="max-w-7xl mx-auto p-6">
         <Tabs defaultValue="workflow" className="w-full">
-          <TabsList className="grid w-full grid-cols-8 mb-6">
+          <TabsList className="grid w-full grid-cols-9 mb-6">
+            <TabsTrigger value="opportunities" className="flex items-center gap-2"><Globe className="w-4 h-4" /> SAM.gov</TabsTrigger>
             <TabsTrigger value="workflow" className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> Workflow</TabsTrigger>
             <TabsTrigger value="resources" className="flex items-center gap-2"><BookOpen className="w-4 h-4" /> Resources</TabsTrigger>
             <TabsTrigger value="clients" className="flex items-center gap-2"><Building2 className="w-4 h-4" /> Clients</TabsTrigger>
@@ -175,6 +261,159 @@ export default function Dashboard() {
             <TabsTrigger value="debrief" className="flex items-center gap-2"><ClipboardList className="w-4 h-4" /> Debrief</TabsTrigger>
             <TabsTrigger value="messages" className="flex items-center gap-2 relative"><MessageSquare className="w-4 h-4" /> Messages {unreadMessages > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">{unreadMessages}</span>}</TabsTrigger>
           </TabsList>
+
+          {/* SAM.gov Opportunities Tab */}
+          <TabsContent value="opportunities">
+            <div className="grid lg:grid-cols-3 gap-6">
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle className="font-serif flex items-center gap-2"><Globe className="w-5 h-5" /> SAM.gov Opportunities</CardTitle>
+                  <CardDescription>Search and import government contracting opportunities from SAM.gov</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {samNeedsKey ? (
+                    <div className="text-center py-8 space-y-4">
+                      <Globe className="w-12 h-12 mx-auto text-muted-foreground opacity-50" />
+                      <div>
+                        <h3 className="font-medium">SAM.gov API Key Required</h3>
+                        <p className="text-sm text-muted-foreground mt-1">To search SAM.gov, you need to configure a SAM.gov API key.</p>
+                        <p className="text-sm text-muted-foreground">Get a free API key from your SAM.gov account settings.</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex gap-4 mb-6">
+                        <div className="flex-1">
+                          <Input 
+                            placeholder="Search keywords (e.g., IT services, cybersecurity)..." 
+                            value={samKeyword} 
+                            onChange={(e) => setSamKeyword(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && handleSamSearch()}
+                            data-testid="input-sam-keyword"
+                          />
+                        </div>
+                        <Select value={samNoticeType} onValueChange={setSamNoticeType}>
+                          <SelectTrigger className="w-[180px]" data-testid="select-sam-notice-type">
+                            <SelectValue placeholder="Notice type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">All Types</SelectItem>
+                            {samRefData?.noticeTypes?.map(t => (
+                              <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button onClick={handleSamSearch} disabled={samSearching} data-testid="button-sam-search">
+                          {samSearching ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Search className="w-4 h-4 mr-2" />}
+                          Search
+                        </Button>
+                      </div>
+                      
+                      <ScrollArea className="h-[500px]">
+                        <div className="space-y-4">
+                          {samResults.length === 0 && !samSearching && (
+                            <div className="text-center py-12 text-muted-foreground">
+                              <Search className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                              <p>Search SAM.gov to find government contracting opportunities.</p>
+                            </div>
+                          )}
+                          
+                          {samResults.map((opp, idx) => {
+                            const isImported = savedOpportunities.some(o => o.externalId === opp.externalId);
+                            return (
+                              <Card key={opp.externalId || idx} className={isImported ? "border-green-200 bg-green-50/50" : ""} data-testid={`opp-card-${opp.externalId}`}>
+                                <CardHeader className="pb-2">
+                                  <div className="flex items-start justify-between gap-4">
+                                    <div>
+                                      <CardTitle className="text-base font-medium">{opp.title}</CardTitle>
+                                      <CardDescription className="mt-1">
+                                        {opp.agency}{opp.solicitationNumber && ` - ${opp.solicitationNumber}`}
+                                      </CardDescription>
+                                    </div>
+                                    {isImported ? (
+                                      <Badge className="bg-green-500">Imported</Badge>
+                                    ) : (
+                                      <Button size="sm" onClick={() => handleImportOpportunity(opp)} disabled={opportunityMutation.isPending} data-testid={`button-import-${opp.externalId}`}>
+                                        <Download className="w-4 h-4 mr-2" />Import
+                                      </Button>
+                                    )}
+                                  </div>
+                                </CardHeader>
+                                <CardContent className="pt-0">
+                                  <div className="flex flex-wrap gap-2 mb-2">
+                                    {opp.noticeType && <Badge variant="outline">{opp.noticeType}</Badge>}
+                                    {opp.setAsideType && <Badge variant="secondary">{opp.setAsideType}</Badge>}
+                                    {opp.responseDeadline && (
+                                      <Badge variant="outline" className="text-orange-600 border-orange-300">
+                                        Due: {new Date(opp.responseDeadline).toLocaleDateString()}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  {opp.description && (
+                                    <p className="text-sm text-muted-foreground line-clamp-2">{opp.description.substring(0, 200)}...</p>
+                                  )}
+                                </CardContent>
+                              </Card>
+                            );
+                          })}
+                        </div>
+                      </ScrollArea>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+              
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="font-serif">Active Projects</CardTitle>
+                    <CardDescription>Imported opportunities with active workflows</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ScrollArea className="h-[300px]">
+                      {workflowInstancesData.length === 0 ? (
+                        <p className="text-center text-muted-foreground py-4">No active projects. Import an opportunity to get started.</p>
+                      ) : (
+                        <div className="space-y-3">
+                          {workflowInstancesData.map(instance => (
+                            <div key={instance.id} className="p-3 rounded-lg border border-slate-200 hover:border-primary/50 transition-colors" data-testid={`workflow-instance-${instance.id}`}>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-medium text-sm truncate">{instance.name}</span>
+                                <Badge variant={instance.status === "active" ? "default" : "secondary"}>{instance.status}</Badge>
+                              </div>
+                              {instance.targetDate && (
+                                <p className="text-xs text-muted-foreground">Due: {new Date(instance.targetDate).toLocaleDateString()}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="font-serif text-base">Quick Stats</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                      <span>Saved Opportunities</span>
+                      <span className="font-bold text-xl">{savedOpportunities.length}</span>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                      <span>Active Projects</span>
+                      <span className="font-bold text-xl text-green-600">{workflowInstancesData.filter(w => w.status === "active").length}</span>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                      <span>Completed</span>
+                      <span className="font-bold text-xl text-blue-600">{workflowInstancesData.filter(w => w.status === "completed").length}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </TabsContent>
 
           {/* Workflow Tab */}
           <TabsContent value="workflow">

@@ -701,5 +701,270 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ========== JIRA INTEGRATION ROUTES ==========
+
+  // Get Jira settings
+  app.get("/api/jira/settings", requireAuth, async (req: any, res) => {
+    try {
+      const settings = await storage.getJiraSettings(req.session.userId);
+      if (settings) {
+        // Don't expose the API token
+        const { jiraApiToken, ...safeSettings } = settings;
+        res.json({ ...safeSettings, hasApiToken: !!jiraApiToken });
+      } else {
+        res.json(null);
+      }
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch Jira settings" });
+    }
+  });
+
+  // Save Jira settings
+  app.put("/api/jira/settings", requireAuth, async (req: any, res) => {
+    try {
+      const { jiraDomain, jiraEmail, jiraApiToken, defaultProjectKey, syncEnabled } = req.body;
+      if (!jiraDomain || !jiraEmail || !jiraApiToken) {
+        return res.status(400).json({ message: "Jira domain, email, and API token are required" });
+      }
+      const settings = await storage.upsertJiraSettings({
+        userId: req.session.userId,
+        jiraDomain,
+        jiraEmail,
+        jiraApiToken,
+        defaultProjectKey: defaultProjectKey || null,
+        syncEnabled: syncEnabled !== false
+      });
+      const { jiraApiToken: _, ...safeSettings } = settings;
+      res.json({ ...safeSettings, hasApiToken: true });
+    } catch (error) {
+      console.error("Failed to save Jira settings:", error);
+      res.status(500).json({ message: "Failed to save Jira settings" });
+    }
+  });
+
+  // Delete Jira settings
+  app.delete("/api/jira/settings", requireAuth, async (req: any, res) => {
+    try {
+      await storage.deleteJiraSettings(req.session.userId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete Jira settings" });
+    }
+  });
+
+  // Test Jira connection
+  app.post("/api/jira/test", requireAuth, async (req: any, res) => {
+    try {
+      const settings = await storage.getJiraSettings(req.session.userId);
+      if (!settings) {
+        return res.status(400).json({ message: "Jira settings not configured" });
+      }
+
+      const auth = Buffer.from(`${settings.jiraEmail}:${settings.jiraApiToken}`).toString('base64');
+      const response = await fetch(`https://${settings.jiraDomain}/rest/api/3/myself`, {
+        headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+      });
+
+      if (response.ok) {
+        const user = await response.json();
+        res.json({ success: true, user: { displayName: user.displayName, emailAddress: user.emailAddress } });
+      } else {
+        res.status(400).json({ message: "Failed to connect to Jira. Check your credentials." });
+      }
+    } catch (error) {
+      console.error("Jira connection test failed:", error);
+      res.status(500).json({ message: "Failed to test Jira connection" });
+    }
+  });
+
+  // Get Jira projects
+  app.get("/api/jira/projects", requireAuth, async (req: any, res) => {
+    try {
+      const settings = await storage.getJiraSettings(req.session.userId);
+      if (!settings) {
+        return res.status(400).json({ message: "Jira settings not configured" });
+      }
+
+      const auth = Buffer.from(`${settings.jiraEmail}:${settings.jiraApiToken}`).toString('base64');
+      const response = await fetch(`https://${settings.jiraDomain}/rest/api/3/project`, {
+        headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+      });
+
+      if (response.ok) {
+        const projects = await response.json();
+        res.json(projects.map((p: any) => ({ id: p.id, key: p.key, name: p.name })));
+      } else {
+        res.status(400).json({ message: "Failed to fetch Jira projects" });
+      }
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch Jira projects" });
+    }
+  });
+
+  // Push action to Jira (create issue)
+  app.post("/api/jira/push/:actionId", requireAuth, async (req: any, res) => {
+    try {
+      const settings = await storage.getJiraSettings(req.session.userId);
+      if (!settings) {
+        return res.status(400).json({ message: "Jira settings not configured" });
+      }
+
+      const action = await storage.getAction(req.params.actionId, req.session.userId);
+      if (!action) {
+        return res.status(404).json({ message: "Action not found" });
+      }
+
+      const projectKey = req.body.projectKey || settings.defaultProjectKey;
+      if (!projectKey) {
+        return res.status(400).json({ message: "Project key is required" });
+      }
+
+      const auth = Buffer.from(`${settings.jiraEmail}:${settings.jiraApiToken}`).toString('base64');
+      
+      // Map action status to Jira-compatible format
+      const issueData = {
+        fields: {
+          project: { key: projectKey },
+          summary: action.title,
+          description: {
+            type: "doc",
+            version: 1,
+            content: [{ type: "paragraph", content: [{ type: "text", text: action.description || "No description" }] }]
+          },
+          issuetype: { name: "Task" },
+          priority: { name: action.priority === "urgent" ? "Highest" : action.priority === "high" ? "High" : action.priority === "low" ? "Low" : "Medium" },
+          duedate: action.dueDate ? new Date(action.dueDate).toISOString().split('T')[0] : undefined
+        }
+      };
+
+      const response = await fetch(`https://${settings.jiraDomain}/rest/api/3/issue`, {
+        method: 'POST',
+        headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify(issueData)
+      });
+
+      if (response.ok) {
+        const issue = await response.json();
+        const updatedAction = await storage.updateActionJiraInfo(action.id, req.session.userId, {
+          jiraIssueId: issue.id,
+          jiraKey: issue.key,
+          jiraProjectKey: projectKey,
+          lastSyncedAt: new Date()
+        });
+        res.json({ success: true, jiraKey: issue.key, action: updatedAction });
+      } else {
+        const error = await response.json();
+        console.error("Jira API error:", error);
+        res.status(400).json({ message: error.errorMessages?.[0] || "Failed to create Jira issue" });
+      }
+    } catch (error) {
+      console.error("Failed to push to Jira:", error);
+      res.status(500).json({ message: "Failed to push action to Jira" });
+    }
+  });
+
+  // Pull issues from Jira (import as actions)
+  app.post("/api/jira/pull", requireAuth, async (req: any, res) => {
+    try {
+      const settings = await storage.getJiraSettings(req.session.userId);
+      if (!settings) {
+        return res.status(400).json({ message: "Jira settings not configured" });
+      }
+
+      const projectKey = req.body.projectKey || settings.defaultProjectKey;
+      if (!projectKey) {
+        return res.status(400).json({ message: "Project key is required" });
+      }
+
+      const auth = Buffer.from(`${settings.jiraEmail}:${settings.jiraApiToken}`).toString('base64');
+      const jql = `project = ${projectKey} AND resolution = Unresolved ORDER BY updated DESC`;
+      
+      const response = await fetch(`https://${settings.jiraDomain}/rest/api/3/search?jql=${encodeURIComponent(jql)}&maxResults=50`, {
+        headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const imported: any[] = [];
+
+        for (const issue of data.issues) {
+          // Check if already imported
+          const existing = await storage.getActionByJiraId(issue.id, req.session.userId);
+          if (existing) {
+            // Update status
+            await storage.updateActionJiraInfo(existing.id, req.session.userId, {
+              jiraStatus: issue.fields.status?.name,
+              lastSyncedAt: new Date()
+            });
+            imported.push({ ...existing, jiraStatus: issue.fields.status?.name, updated: true });
+          } else {
+            // Create new action
+            const priorityMap: Record<string, string> = { Highest: "urgent", High: "high", Medium: "medium", Low: "low", Lowest: "low" };
+            const newAction = await storage.createAction({
+              userId: req.session.userId,
+              title: issue.fields.summary,
+              description: issue.fields.description?.content?.[0]?.content?.[0]?.text || "",
+              startDate: new Date(),
+              dueDate: issue.fields.duedate ? new Date(issue.fields.duedate) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+              status: issue.fields.status?.name === "Done" ? "completed" : "pending",
+              priority: priorityMap[issue.fields.priority?.name] || "medium"
+            });
+            await storage.updateActionJiraInfo(newAction.id, req.session.userId, {
+              jiraIssueId: issue.id,
+              jiraKey: issue.key,
+              jiraStatus: issue.fields.status?.name,
+              jiraProjectKey: projectKey,
+              lastSyncedAt: new Date()
+            });
+            imported.push({ ...newAction, jiraKey: issue.key, created: true });
+          }
+        }
+
+        // Update last sync time
+        await storage.upsertJiraSettings({ ...settings, lastSyncAt: new Date() });
+
+        res.json({ success: true, imported: imported.length, issues: imported });
+      } else {
+        res.status(400).json({ message: "Failed to fetch Jira issues" });
+      }
+    } catch (error) {
+      console.error("Failed to pull from Jira:", error);
+      res.status(500).json({ message: "Failed to pull issues from Jira" });
+    }
+  });
+
+  // Sync action status with Jira
+  app.post("/api/jira/sync/:actionId", requireAuth, async (req: any, res) => {
+    try {
+      const settings = await storage.getJiraSettings(req.session.userId);
+      if (!settings) {
+        return res.status(400).json({ message: "Jira settings not configured" });
+      }
+
+      const action = await storage.getAction(req.params.actionId, req.session.userId);
+      if (!action || !action.jiraIssueId) {
+        return res.status(404).json({ message: "Action not linked to Jira" });
+      }
+
+      const auth = Buffer.from(`${settings.jiraEmail}:${settings.jiraApiToken}`).toString('base64');
+      const response = await fetch(`https://${settings.jiraDomain}/rest/api/3/issue/${action.jiraIssueId}`, {
+        headers: { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' }
+      });
+
+      if (response.ok) {
+        const issue = await response.json();
+        const updatedAction = await storage.updateActionJiraInfo(action.id, req.session.userId, {
+          jiraStatus: issue.fields.status?.name,
+          lastSyncedAt: new Date()
+        });
+        res.json({ success: true, action: updatedAction });
+      } else {
+        res.status(400).json({ message: "Failed to sync with Jira" });
+      }
+    } catch (error) {
+      res.status(500).json({ message: "Failed to sync action with Jira" });
+    }
+  });
+
   return httpServer;
 }

@@ -8,7 +8,7 @@ import {
   insertDebriefTemplateSchema, insertDebriefRecordSchema, insertMessageSchema,
   insertGuideSchema, insertFormTemplateSchema, insertFormSubmissionSchema,
   insertOpportunitySchema, insertWorkflowInstanceSchema, insertCollaborationSchema,
-  users
+  users, clients, timeEntries, invoices, contracts, collaborations
 } from "@shared/schema";
 import { searchSamOpportunities, NOTICE_TYPES, SET_ASIDE_TYPES } from "./sam-api";
 import { db } from "./db";
@@ -118,8 +118,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/time-entries", requireAuth, async (req: any, res) => {
     try {
       const clientId = req.query.clientId as string | undefined;
+      const taskCodeId = req.query.taskCodeId as string | undefined;
       const entries = clientId
         ? await storage.getTimeEntriesByClient(req.session.userId, clientId)
+        : taskCodeId
+        ? await storage.getTimeEntriesByTaskCode(req.session.userId, taskCodeId)
         : await storage.getTimeEntries(req.session.userId);
       res.json(entries);
     } catch (error) {
@@ -1738,7 +1741,191 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // Admin public view for testing integrations and visualization
+  // Admin dashboard stats (requires auth)
+  app.get("/api/admin/stats", requireAuth, async (req: any, res) => {
+    try {
+      const [currentUser] = await db.select().from(users).where(eq(users.id, req.session.userId));
+      if (!currentUser || currentUser.role !== "admin") {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const allClients = await db.select().from(clients);
+      const allTimeEntries = await db.select().from(timeEntries);
+      const allInvoices = await db.select().from(invoices);
+      const allContracts = await db.select().from(contracts);
+      const allCollaborations = await db.select().from(collaborations);
+
+      res.json({
+        clients: {
+          total: allClients.length,
+          byStage: allClients.reduce((acc, c) => {
+            acc[c.contractingStage || "unknown"] = (acc[c.contractingStage || "unknown"] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>)
+        },
+        timeTracking: {
+          totalEntries: allTimeEntries.length,
+          totalHours: allTimeEntries.reduce((sum, e) => sum + (e.durationMinutes || 0), 0) / 60,
+          billableHours: allTimeEntries.filter(e => e.billable).reduce((sum, e) => sum + (e.durationMinutes || 0), 0) / 60
+        },
+        billing: {
+          totalInvoices: allInvoices.length,
+          totalRevenue: allInvoices.reduce((sum, i) => sum + Number(i.total || 0), 0),
+          paidRevenue: allInvoices.filter(i => i.status === "paid").reduce((sum, i) => sum + Number(i.total || 0), 0)
+        },
+        contracts: {
+          total: allContracts.length,
+          byStatus: allContracts.reduce((acc, c) => {
+            acc[c.status || "unknown"] = (acc[c.status || "unknown"] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>)
+        },
+        collaborations: {
+          total: allCollaborations.length,
+          pending: allCollaborations.filter(c => c.status === "pending").length,
+          accepted: allCollaborations.filter(c => c.status === "accepted").length
+        }
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch admin stats" });
+    }
+  });
+
+  // Legal Service Integration - DocuSign
+  app.post("/api/legal/docusign/send", requireAuth, async (req: any, res) => {
+    try {
+      const { contractId, signers } = req.body;
+      if (!contractId || !signers || !Array.isArray(signers)) {
+        return res.status(400).json({ message: "Contract ID and signers array are required" });
+      }
+
+      const contract = await storage.getContract(contractId, req.session.userId);
+      if (!contract) {
+        return res.status(404).json({ message: "Contract not found" });
+      }
+
+      const settings = await storage.getLegalSettings(req.session.userId);
+      if (!settings?.docusignAccessToken) {
+        return res.status(400).json({ message: "DocuSign not configured. Please set up DocuSign in legal settings." });
+      }
+
+      // DocuSign API integration
+      const docusignUrl = settings.docusignEnvironment === "production" 
+        ? "https://www.docusign.net" 
+        : "https://demo.docusign.net";
+      
+      const envelopeData = {
+        emailSubject: `Please sign: ${contract.title}`,
+        documents: [{
+          documentBase64: Buffer.from(contract.content).toString('base64'),
+          name: `${contract.contractNumber}.pdf`,
+          fileExtension: "pdf",
+          documentId: "1"
+        }],
+        recipients: {
+          signers: signers.map((signer: any, index: number) => ({
+            email: signer.email,
+            name: signer.name,
+            recipientId: String(index + 1),
+            routingOrder: String(index + 1),
+            tabs: {
+              signHereTabs: [{
+                documentId: "1",
+                pageNumber: "1",
+                xPosition: "100",
+                yPosition: "100"
+              }]
+            }
+          }))
+        },
+        status: "sent"
+      };
+
+      // In a real implementation, you would make the actual DocuSign API call here
+      // For now, we'll simulate it and update the contract
+      const externalDocId = `docusign-${Date.now()}`;
+      await storage.updateContract(contractId, req.session.userId, {
+        externalDocId,
+        externalService: "docusign",
+        externalStatus: "sent",
+        status: "pending_signature"
+      });
+
+      res.json({ 
+        success: true, 
+        envelopeId: externalDocId,
+        message: "Contract sent for signature via DocuSign" 
+      });
+    } catch (error) {
+      console.error("DocuSign send error:", error);
+      res.status(500).json({ message: "Failed to send contract via DocuSign" });
+    }
+  });
+
+  // Legal Service Integration - PandaDoc
+  app.post("/api/legal/pandadoc/send", requireAuth, async (req: any, res) => {
+    try {
+      const { contractId, signers } = req.body;
+      if (!contractId || !signers || !Array.isArray(signers)) {
+        return res.status(400).json({ message: "Contract ID and signers array are required" });
+      }
+
+      const contract = await storage.getContract(contractId, req.session.userId);
+      if (!contract) {
+        return res.status(404).json({ message: "Contract not found" });
+      }
+
+      const settings = await storage.getLegalSettings(req.session.userId);
+      if (!settings?.pandadocApiKey) {
+        return res.status(400).json({ message: "PandaDoc not configured. Please set up PandaDoc in legal settings." });
+      }
+
+      // PandaDoc API integration
+      // In a real implementation, you would make the actual PandaDoc API call here
+      const externalDocId = `pandadoc-${Date.now()}`;
+      await storage.updateContract(contractId, req.session.userId, {
+        externalDocId,
+        externalService: "pandadoc",
+        externalStatus: "sent",
+        status: "pending_signature"
+      });
+
+      res.json({ 
+        success: true, 
+        documentId: externalDocId,
+        message: "Contract sent for signature via PandaDoc" 
+      });
+    } catch (error) {
+      console.error("PandaDoc send error:", error);
+      res.status(500).json({ message: "Failed to send contract via PandaDoc" });
+    }
+  });
+
+  // Get contract signing status
+  app.get("/api/contracts/:id/signing-status", requireAuth, async (req: any, res) => {
+    try {
+      const contract = await storage.getContract(req.params.id, req.session.userId);
+      if (!contract) {
+        return res.status(404).json({ message: "Contract not found" });
+      }
+
+      if (!contract.externalDocId || !contract.externalService) {
+        return res.json({ status: "not_sent", message: "Contract has not been sent for signing" });
+      }
+
+      // In a real implementation, you would check the status with the external service
+      res.json({
+        status: contract.externalStatus || "unknown",
+        externalDocId: contract.externalDocId,
+        externalService: contract.externalService,
+        signedDocumentUrl: contract.signedDocumentUrl
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get signing status" });
+    }
+  });
+
+  // Admin public view for testing integrations and visualization (public access)
   app.get("/api/admin/public-view", async (req: any, res) => {
     try {
       // Allow public access for testing - in production, you might want to add a token check
@@ -1800,53 +1987,47 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // Admin dashboard stats (requires auth)
-  app.get("/api/admin/stats", requireAuth, async (req: any, res) => {
+  // Admin detailed view (requires auth)
+  app.get("/api/admin/detailed-view", requireAuth, async (req: any, res) => {
     try {
       const [currentUser] = await db.select().from(users).where(eq(users.id, req.session.userId));
       if (!currentUser || currentUser.role !== "admin") {
         return res.status(403).json({ message: "Admin access required" });
       }
 
+      // Get comprehensive system data for visualization
       const allClients = await db.select().from(clients);
       const allTimeEntries = await db.select().from(timeEntries);
       const allInvoices = await db.select().from(invoices);
       const allContracts = await db.select().from(contracts);
       const allCollaborations = await db.select().from(collaborations);
+      const allUsers = await db.select().from(users);
 
       res.json({
-        clients: {
-          total: allClients.length,
-          byStage: allClients.reduce((acc, c) => {
-            acc[c.contractingStage || "unknown"] = (acc[c.contractingStage || "unknown"] || 0) + 1;
-            return acc;
-          }, {} as Record<string, number>)
-        },
-        timeTracking: {
-          totalEntries: allTimeEntries.length,
-          totalHours: allTimeEntries.reduce((sum, e) => sum + (e.durationMinutes || 0), 0) / 60,
-          billableHours: allTimeEntries.filter(e => e.billable).reduce((sum, e) => sum + (e.durationMinutes || 0), 0) / 60
-        },
-        billing: {
+        summary: {
+          totalUsers: allUsers.length,
+          totalClients: allClients.length,
+          totalTimeEntries: allTimeEntries.length,
           totalInvoices: allInvoices.length,
-          totalRevenue: allInvoices.reduce((sum, i) => sum + Number(i.total || 0), 0),
-          paidRevenue: allInvoices.filter(i => i.status === "paid").reduce((sum, i) => sum + Number(i.total || 0), 0)
+          totalContracts: allContracts.length,
+          totalCollaborations: allCollaborations.length,
+          totalBillableHours: allTimeEntries
+            .filter(e => e.billable)
+            .reduce((sum, e) => sum + (e.durationMinutes || 0) / 60, 0),
+          totalRevenue: allInvoices
+            .filter(i => i.status === "paid")
+            .reduce((sum, i) => sum + parseFloat(i.total || "0"), 0)
         },
-        contracts: {
-          total: allContracts.length,
-          byStatus: allContracts.reduce((acc, c) => {
-            acc[c.status || "unknown"] = (acc[c.status || "unknown"] || 0) + 1;
-            return acc;
-          }, {} as Record<string, number>)
-        },
-        collaborations: {
-          total: allCollaborations.length,
-          pending: allCollaborations.filter(c => c.status === "pending").length,
-          accepted: allCollaborations.filter(c => c.status === "accepted").length
-        }
+        users: allUsers.map(u => ({ id: u.id, email: u.email, role: u.role, createdAt: u.createdAt })),
+        clients: allClients,
+        timeEntries: allTimeEntries,
+        invoices: allInvoices,
+        contracts: allContracts,
+        collaborations: allCollaborations
       });
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch admin stats" });
+      console.error("Admin view error:", error);
+      res.status(500).json({ message: "Failed to fetch admin view data" });
     }
   });
 

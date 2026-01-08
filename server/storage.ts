@@ -132,6 +132,10 @@ export class DatabaseStorage {
     return await db.select().from(timeEntries).where(and(eq(timeEntries.userId, userId), eq(timeEntries.clientId, clientId)));
   }
 
+  async getTimeEntriesByTaskCode(userId: string, taskCodeId: string): Promise<TimeEntry[]> {
+    return await db.select().from(timeEntries).where(and(eq(timeEntries.userId, userId), eq(timeEntries.taskCodeId, taskCodeId)));
+  }
+
   async createTimeEntry(entry: InsertTimeEntry): Promise<TimeEntry> {
     const [created] = await db.insert(timeEntries).values(entry).returning();
     return created;
@@ -150,6 +154,11 @@ export class DatabaseStorage {
   // Actions
   async getActions(userId: string): Promise<Action[]> {
     return await db.select().from(actions).where(eq(actions.userId, userId)).orderBy(actions.dueDate);
+  }
+
+  async getAction(id: string, userId: string): Promise<Action | undefined> {
+    const [action] = await db.select().from(actions).where(and(eq(actions.id, id), eq(actions.userId, userId)));
+    return action;
   }
 
   async createAction(action: InsertAction): Promise<Action> {
@@ -236,6 +245,11 @@ export class DatabaseStorage {
   // Messages
   async getMessages(userId: string): Promise<Message[]> {
     return await db.select().from(messages).where(eq(messages.userId, userId)).orderBy(desc(messages.createdAt));
+  }
+
+  async getMessage(id: string, userId: string): Promise<Message | undefined> {
+    const [message] = await db.select().from(messages).where(and(eq(messages.id, id), eq(messages.userId, userId)));
+    return message;
   }
 
   async getMessagesByClient(userId: string, clientId: string): Promise<Message[]> {
@@ -846,6 +860,14 @@ export class DatabaseStorage {
     const entries = await db.select().from(timeEntries).where(and(eq(timeEntries.userId, userId), eq(timeEntries.clientId, clientId), eq(timeEntries.billable, true), eq(timeEntries.invoiced, false)));
     const filteredEntries = timeEntryIds.length > 0 ? entries.filter(e => timeEntryIds.includes(e.id)) : entries;
     
+    // Get task codes for better invoice descriptions
+    const taskCodeIds = filteredEntries.map(e => e.taskCodeId).filter(Boolean) as string[];
+    const taskCodesMap = new Map<string, TaskCode>();
+    if (taskCodeIds.length > 0) {
+      const codes = await db.select().from(taskCodes).where(inArray(taskCodes.id, taskCodeIds));
+      codes.forEach(code => taskCodesMap.set(code.id, code));
+    }
+    
     let subtotal = 0;
     for (const entry of filteredEntries) {
       const hours = (entry.durationMinutes || 0) / 60;
@@ -863,8 +885,15 @@ export class DatabaseStorage {
     for (const entry of filteredEntries) {
       const hours = (entry.durationMinutes || 0) / 60;
       const rate = parseFloat(entry.hourlyRate || "0");
+      const taskCode = entry.taskCodeId ? taskCodesMap.get(entry.taskCodeId) : null;
+      const description = taskCode ? `[${taskCode.code}] ${entry.description}` : entry.description;
       await db.insert(invoiceItems).values({
-        invoiceId: invoice.id, description: entry.description, quantity: hours.toFixed(2), unitPrice: rate.toFixed(2), total: (hours * rate).toFixed(2)
+        invoiceId: invoice.id, 
+        timeEntryId: entry.id,
+        description, 
+        quantity: hours.toFixed(2), 
+        unitPrice: rate.toFixed(2), 
+        amount: (hours * rate).toFixed(2)
       });
       await db.update(timeEntries).set({ invoiced: true, invoiceId: invoice.id }).where(eq(timeEntries.id, entry.id));
     }

@@ -65,6 +65,8 @@ export const timeEntries = pgTable("time_entries", {
   userId: varchar("user_id").notNull(),
   clientId: varchar("client_id"),
   componentId: varchar("component_id"),
+  taskCodeId: varchar("task_code_id"), // Link to project/task code
+  billingRateId: varchar("billing_rate_id"), // Link to billing rate
   description: text("description").notNull(),
   startTime: timestamp("start_time").notNull(),
   endTime: timestamp("end_time"),
